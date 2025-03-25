@@ -1,70 +1,31 @@
 #include <stdio.h>
 #include <assert.h>
-#include <stdint.h>
+#include <string.h>
 #include "shell.h"
 
-// Definiciones mejoradas
-#define OPCODE_MASK 0x1F000000
-#define OPCODE_SHIFT 24
+#define OP_MASK 0xFFE00000
 
-<<<<<<< Updated upstream
-// Tabla de instrucciones
-typedef struct
-{
-    uint32_t mask;
-    uint32_t pattern;
-    const char *name;
-    void (*handler)(uint32_t);
-} InstructionDesc;
-=======
 uint64_t rd;
 uint64_t rn;
 uint64_t imm;
 uint32_t shift;
 uint64_t rm;
 uint64_t result_cmp;
->>>>>>> Stashed changes
 
-// Prototipos
-void handle_add(uint32_t instr);
-void handle_sub(uint32_t instr);
-void handle_movz(uint32_t instr);
-void handle_halt(uint32_t instr);
-
-InstructionDesc instructions[] = {
-    {0xFFFFFC00, 0xD5030000, "HALT", handle_halt},
-    {0xFFE00000, 0x4B000000, "ADDS (extended)", handle_add},
-    {0xFFE00000, 0x6B000000, "SUBS (extended)", handle_sub},
-    {0xFF800000, 0x52800000, "MOVZ", handle_movz},
-};
-
-int RUN_BIT = 1;
-CPU_State CURRENT_STATE, NEXT_STATE;
+int get_opcode(int instruction) {
+    return (unsigned)(instruction & OP_MASK) >> 21;
+}
 
 void process_instruction()
 {
-    uint32_t instr = mem_read_32(CURRENT_STATE.PC);
+    /* execute one instruction here. You should use CURRENT_STATE and modify
+     * values in NEXT_STATE. You can call mem_read_32() and mem_write_32() to
+     * access memory.
+     * */
 
-    for (int i = 0; i < sizeof(instructions) / sizeof(InstructionDesc); i++)
-    {
-        if ((instr & instructions[i].mask) == instructions[i].pattern)
-        {
-            printf("Executing %s: 0x%08x\n", instructions[i].name, instr);
-            instructions[i].handler(instr);
+    uint32_t read = mem_read_32(CURRENT_STATE.PC);
+    int instruction = get_opcode(read);
 
-<<<<<<< Updated upstream
-            if (RUN_BIT)
-            {
-                CURRENT_STATE = NEXT_STATE;
-            }
-            return;
-        }
-    }
-
-    printf("Unknown instruction at PC=0x%08x: 0x%08x\n",
-           CURRENT_STATE.PC, instr);
-    RUN_BIT = 0;
-=======
 
     printf("Executing instruction: 0x%08x\n", read);
 
@@ -211,28 +172,6 @@ void process_instruction()
     printf("Opcode: 0x%03x\n", instruction);
 
 
->>>>>>> Stashed changes
 }
 
-// Handlers específicos
-void handle_add(uint32_t instr)
-{
-    uint32_t rd = (instr >> 0) & 0x1F;
-    uint32_t rn = (instr >> 5) & 0x1F;
-    uint32_t rm = (instr >> 16) & 0x1F;
 
-    assert(rd < 32 && rn < 32 && rm < 32);
-
-    uint64_t result = CURRENT_STATE.REGS[rn] + CURRENT_STATE.REGS[rm];
-
-    NEXT_STATE = CURRENT_STATE;
-    NEXT_STATE.REGS[rd] = result;
-    NEXT_STATE.FLAG_Z = (result == 0);
-    NEXT_STATE.FLAG_N = (result >> 63) & 1;
-    NEXT_STATE.PC += 4;
-}
-
-void handle_halt(uint32_t instr)
-{
-    RUN_BIT = 0;
-}
