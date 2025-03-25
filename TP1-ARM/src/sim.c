@@ -163,6 +163,21 @@ void process_instruction()
             NEXT_STATE.PC = CURRENT_STATE.PC + 4;
             break;
 
+
+        case 0x550:
+
+            printf("ORR SHIFTED REGISTER\n");
+
+            rm = (read & 0x1F0000) >> 16;
+            rn = (read & 0x3E0) >> 5;
+            rd = (read & 0x1F);
+            imm = (read & 0xFC00) >> 10;
+
+            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] | (CURRENT_STATE.REGS[rm]);
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
         default:
             NEXT_STATE.PC = CURRENT_STATE.PC + 4;
             break;
