@@ -7,6 +7,7 @@
 #define OPCODE_MASK 0x1F000000
 #define OPCODE_SHIFT 24
 
+<<<<<<< Updated upstream
 // Tabla de instrucciones
 typedef struct
 {
@@ -15,6 +16,14 @@ typedef struct
     const char *name;
     void (*handler)(uint32_t);
 } InstructionDesc;
+=======
+uint64_t rd;
+uint64_t rn;
+uint64_t imm;
+uint32_t shift;
+uint64_t rm;
+uint64_t result_cmp;
+>>>>>>> Stashed changes
 
 // Prototipos
 void handle_add(uint32_t instr);
@@ -43,6 +52,7 @@ void process_instruction()
             printf("Executing %s: 0x%08x\n", instructions[i].name, instr);
             instructions[i].handler(instr);
 
+<<<<<<< Updated upstream
             if (RUN_BIT)
             {
                 CURRENT_STATE = NEXT_STATE;
@@ -54,6 +64,154 @@ void process_instruction()
     printf("Unknown instruction at PC=0x%08x: 0x%08x\n",
            CURRENT_STATE.PC, instr);
     RUN_BIT = 0;
+=======
+
+    printf("Executing instruction: 0x%08x\n", read);
+
+    switch (instruction) {
+
+        case 0x6a2:
+            printf("HALT\n");
+            RUN_BIT = 0;
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+        case 0x558:
+            printf("ADDS EXTENDED\n");
+
+            rd = (read & 0x1F);
+            rn = (read & 0x3E0) >> 5;
+            rm = (read & 0x1F0000) >> 16;
+
+            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] + CURRENT_STATE.REGS[rm];
+
+            NEXT_STATE.FLAG_Z = (NEXT_STATE.REGS[rd] == 0) ? 1 : 0;
+            NEXT_STATE.FLAG_N = (NEXT_STATE.REGS[rd] < 0) ? 1 : 0;
+
+            if (NEXT_STATE.REGS[rd] < 0) {
+                NEXT_STATE.FLAG_N = 1;
+            } else {
+                NEXT_STATE.FLAG_N = 0;
+            }
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+        case 0x588:
+            printf("ADDS IMMEDIATE\n");
+
+            rd = (read & 0x1F);
+            rn = (read & 0x3E0) >> 5;
+            imm = (read & 0x3FFC00) >> 10;
+            shift = (read & 0xC00000) >> 22;
+
+//            printf("shift: 0x%02x\n", shift);
+
+            if (shift == 1) {
+                printf("Shifting...");
+                imm = imm << 12;
+            }
+
+            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] + imm;
+
+            NEXT_STATE.FLAG_Z = (NEXT_STATE.REGS[rd] == 0) ? 1 : 0;
+            NEXT_STATE.FLAG_N = (NEXT_STATE.REGS[rd] < 0) ? 1 : 0;
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+        case 0x758:
+
+            printf("SUBS / CMP EXTENDED\n");
+
+            rd = (read & 0x1F);
+            rn = (read & 0x3E0) >> 5;
+            rm = (read & 0x1F0000) >> 16;
+
+
+            result_cmp = CURRENT_STATE.REGS[rn] - CURRENT_STATE.REGS[rm];
+
+            if (rd != 31){
+                NEXT_STATE.REGS[rd] = result_cmp;
+            }
+
+            NEXT_STATE.FLAG_Z = (result_cmp == 0) ? 1 : 0;
+            NEXT_STATE.FLAG_N = (result_cmp < 0) ? 1 : 0;
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+        case 0x788:
+
+            printf("SUBS / CMP IMMEDIATE\n");
+
+            rd = (read & 0x1F);
+            rn = (read & 0x3E0) >> 5;
+            imm = (read & 0x3FFC00) >> 10;
+            shift = (read & 0xC00000) >> 22;
+
+//            printf("shift: 0x%02x\n", shift);
+
+            if (shift == 1) {
+                printf("Shifting...");
+                imm = imm << 12;
+            }
+
+            result_cmp = CURRENT_STATE.REGS[rn] - imm;
+
+            if (rd != 31){
+                NEXT_STATE.REGS[rd] = result_cmp;
+            }
+
+            NEXT_STATE.FLAG_Z = (result_cmp == 0) ? 1 : 0;
+            NEXT_STATE.FLAG_N = (result_cmp < 0) ? 1 : 0;
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+
+        case 0x750:
+
+            printf("ANDS SHIFTED REGISTER\n");
+
+            rm = (read & 0x1F0000) >> 16;
+            rn = (read & 0x3E0) >> 5;
+            rd = (read & 0x1F);
+            imm = (read & 0xFC00) >> 10;
+
+            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] & (CURRENT_STATE.REGS[rm]);
+
+            NEXT_STATE.FLAG_Z = (NEXT_STATE.REGS[rd] == 0) ? 1 : 0;
+            NEXT_STATE.FLAG_N = (NEXT_STATE.REGS[rd] < 0) ? 1 : 0;
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+
+        case 0x650:
+
+            printf("EOR SHIFTED REGISTER\n");
+
+            rm = (read & 0x1F0000) >> 16;
+            rn = (read & 0x3E0) >> 5;
+            rd = (read & 0x1F);
+            imm = (read & 0xFC00) >> 10;
+
+            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] ^ (CURRENT_STATE.REGS[rm]);
+
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+        default:
+            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+            break;
+
+    }
+
+    printf("Opcode: 0x%03x\n", instruction);
+
+
+>>>>>>> Stashed changes
 }
 
 // Handlers específicos
