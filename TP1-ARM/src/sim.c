@@ -1,169 +1,91 @@
 #include <stdio.h>
 #include <assert.h>
-#include <string.h>
+#include <stdint.h>
 #include "shell.h"
 
-#define OP_MASK 0xFFE00000
+// Definiciones mejoradas
+#define OPCODE_MASK 0x1F000000
+#define OPCODE_SHIFT 24
 
-uint32_t rd;
-uint32_t rn;
-uint32_t imm;
-uint32_t shift;
-uint32_t rm;
+// Estructura del procesador
+typedef struct
+{
+    uint64_t REGS[32]; // Registros X0-X31
+    uint64_t PC;       // Contador de programa
+    uint8_t FLAG_N;    // Flag Negative
+    uint8_t FLAG_Z;    // Flag Zero
+    uint8_t FLAG_C;    // Flag Carry
+    uint8_t FLAG_V;    // Flag Overflow
+} ProcessorState;
 
-int get_opcode(int instruction) {
-    return (unsigned)(instruction & OP_MASK) >> 21;
-}
+// Tabla de instrucciones
+typedef struct
+{
+    uint32_t mask;
+    uint32_t pattern;
+    const char *name;
+    void (*handler)(uint32_t);
+} InstructionDesc;
+
+// Prototipos
+void handle_add(uint32_t instr);
+void handle_sub(uint32_t instr);
+void handle_movz(uint32_t instr);
+void handle_halt(uint32_t instr);
+
+InstructionDesc instructions[] = {
+    {0xFFFFFC00, 0xD5030000, "HALT", handle_halt},
+    {0xFFE00000, 0x4B000000, "ADDS (extended)", handle_add},
+    {0xFFE00000, 0x6B000000, "SUBS (extended)", handle_sub},
+    {0xFF800000, 0x52800000, "MOVZ", handle_movz},
+};
+
+int RUN_BIT = 1;
+ProcessorState CURRENT_STATE, NEXT_STATE;
 
 void process_instruction()
 {
-    /* execute one instruction here. You should use CURRENT_STATE and modify
-     * values in NEXT_STATE. You can call mem_read_32() and mem_write_32() to
-     * access memory. 
-     * */
+    uint32_t instr = mem_read_32(CURRENT_STATE.PC);
 
-    uint32_t read = mem_read_32(CURRENT_STATE.PC);
-    int instruction = get_opcode(read);
+    for (int i = 0; i < sizeof(instructions) / sizeof(InstructionDesc); i++)
+    {
+        if ((instr & instructions[i].mask) == instructions[i].pattern)
+        {
+            printf("Executing %s: 0x%08x\n", instructions[i].name, instr);
+            instructions[i].handler(instr);
 
-
-    printf("Executing instruction: 0x%08x\n", read);
-
-    switch (instruction) {
-
-        case 0x6a2:
-            printf("HALT\n");
-            RUN_BIT = 0;
-            break;
-
-        case 0x558:
-            printf("ADDS EXTENDED\n");
-
-            rd = (read & 0x1F);
-            rn = (read & 0x3E0) >> 5;
-            rm = (read & 0x1F0000) >> 16;
-
-            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] + CURRENT_STATE.REGS[rm];
-
-            if (NEXT_STATE.REGS[rd] == 0) {
-                NEXT_STATE.FLAG_Z = 1;
-            } else {
-                NEXT_STATE.FLAG_Z = 0;
+            if (RUN_BIT)
+            {
+                CURRENT_STATE = NEXT_STATE;
             }
-
-            if (NEXT_STATE.REGS[rd] < 0) {
-                NEXT_STATE.FLAG_N = 1;
-            } else {
-                NEXT_STATE.FLAG_N = 0;
-            }
-
-            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
-            break;
-
-        case 0x588:
-            printf("ADDS IMMEDIATE\n");
-
-            rd = (read & 0x1F);
-            rn = (read & 0x3E0) >> 5;
-            imm = (read & 0x7C00) >> 10;
-            shift = (read & 0xC00000) >> 22;
-
-//            printf("shift: 0x%02x\n", shift);
-
-            if (shift == 1) {
-                printf("Shifting...");
-                imm = imm << 12;
-            }
-
-            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] + imm;
-
-            if (NEXT_STATE.REGS[rd] == 0) {
-                NEXT_STATE.FLAG_Z = 1;
-            } else {
-                NEXT_STATE.FLAG_Z = 0;
-            }
-
-            if (NEXT_STATE.REGS[rd] < 0) {
-                NEXT_STATE.FLAG_N = 1;
-            } else {
-                NEXT_STATE.FLAG_N = 0;
-            }
-
-            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
-            break;
-
-        case 0x758:
-
-            printf("SUBS EXTENDED\n");
-
-            rd = (read & 0x1F);
-            rn = (read & 0x3E0) >> 5;
-            rm = (read & 0x1F0000) >> 16;
-
-            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] - CURRENT_STATE.REGS[rm];
-
-            if (NEXT_STATE.REGS[rd] == 0) {
-                NEXT_STATE.FLAG_Z = 1;
-            } else {
-                NEXT_STATE.FLAG_Z = 0;
-            }
-
-            if (NEXT_STATE.REGS[rd] < 0) {
-                NEXT_STATE.FLAG_N = 1;
-            } else {
-                NEXT_STATE.FLAG_N = 0;
-            }
-
-            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
-            break;
-
-        case 0x788:
-
-            printf("SUBS IMMEDIATE\n");
-
-            rd = (read & 0x1F);
-            rn = (read & 0x3E0) >> 5;
-            imm = (read & 0x7C00) >> 10;
-            shift = (read & 0xC00000) >> 22;
-
-//            printf("shift: 0x%02x\n", shift);
-
-            if (shift == 1) {
-                printf("Shifting...");
-                imm = imm << 12;
-            }
-
-            NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rn] - imm;
-
-            if (NEXT_STATE.REGS[rd] == 0) {
-                NEXT_STATE.FLAG_Z = 1;
-            } else {
-                NEXT_STATE.FLAG_Z = 0;
-            }
-
-            if (NEXT_STATE.REGS[rd] < 0) {
-                NEXT_STATE.FLAG_N = 1;
-            } else {
-                NEXT_STATE.FLAG_N = 0;
-            }
-
-            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
-            break;
-
-
-        default:
-            NEXT_STATE.PC = CURRENT_STATE.PC + 4;
-            break;
-
+            return;
+        }
     }
 
-    printf("Opcode: 0x%03x\n", instruction);
-
-//CURRENT_STATE.PC = NEXT_STATE;
-
-
-
-
-
+    printf("Unknown instruction at PC=0x%08x: 0x%08x\n",
+           CURRENT_STATE.PC, instr);
+    RUN_BIT = 0;
 }
 
+// Handlers específicos
+void handle_add(uint32_t instr)
+{
+    uint32_t rd = (instr >> 0) & 0x1F;
+    uint32_t rn = (instr >> 5) & 0x1F;
+    uint32_t rm = (instr >> 16) & 0x1F;
 
+    assert(rd < 32 && rn < 32 && rm < 32);
+
+    uint64_t result = CURRENT_STATE.REGS[rn] + CURRENT_STATE.REGS[rm];
+
+    NEXT_STATE = CURRENT_STATE;
+    NEXT_STATE.REGS[rd] = result;
+    NEXT_STATE.FLAG_Z = (result == 0);
+    NEXT_STATE.FLAG_N = (result >> 63) & 1;
+    NEXT_STATE.PC += 4;
+}
+
+void handle_halt(uint32_t instr)
+{
+    RUN_BIT = 0;
+}
