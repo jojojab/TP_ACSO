@@ -7,17 +7,6 @@
 #define OPCODE_MASK 0x1F000000
 #define OPCODE_SHIFT 24
 
-// Estructura del procesador
-typedef struct
-{
-    uint64_t REGS[32]; // Registros X0-X31
-    uint64_t PC;       // Contador de programa
-    uint8_t FLAG_N;    // Flag Negative
-    uint8_t FLAG_Z;    // Flag Zero
-    uint8_t FLAG_C;    // Flag Carry
-    uint8_t FLAG_V;    // Flag Overflow
-} ProcessorState;
-
 // Tabla de instrucciones
 typedef struct
 {
@@ -41,7 +30,7 @@ InstructionDesc instructions[] = {
 };
 
 int RUN_BIT = 1;
-ProcessorState CURRENT_STATE, NEXT_STATE;
+CPU_State CURRENT_STATE, NEXT_STATE;
 
 void process_instruction()
 {
