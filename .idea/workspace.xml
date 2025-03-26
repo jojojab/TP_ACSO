@@ -9,7 +9,13 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f0b08c73-5dab-4739-9dcb-ff33414192cd" name="Changes" comment="" />
+    <list default="true" id="f0b08c73-5dab-4739-9dcb-ff33414192cd" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/TP1-ARM/inputs/orr.s" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TP1-ARM/src/dumpsim" beforeDir="false" afterPath="$PROJECT_DIR$/TP1-ARM/src/dumpsim" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TP1-ARM/src/sim" beforeDir="false" afterPath="$PROJECT_DIR$/TP1-ARM/src/sim" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TP1-ARM/src/sim.c" beforeDir="false" afterPath="$PROJECT_DIR$/TP1-ARM/src/sim.c" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -74,7 +80,10 @@
       <workItem from="1742502883177" duration="936000" />
       <workItem from="1742503851652" duration="48000" />
       <workItem from="1742924529254" duration="8085000" />
-      <workItem from="1742936416375" duration="300000" />
+      <workItem from="1742936416375" duration="387000" />
+      <workItem from="1742936876725" duration="175000" />
+      <workItem from="1742937144665" duration="24000" />
+      <workItem from="1742938371066" duration="490000" />
     </task>
     <servers />
   </component>
