@@ -1,2 +1,4 @@
+.gitignore
 .idea/
 TP1-ARM/.vscode/settings.json
+TP1-ARM/.vscode/c_cpp_properties.json

@@ -19,16 +19,22 @@ instruction_t instruction_table[] = {
     {OP_MASK, OP_LDUR << 21, "LDUR", handle_ldur},
     {OP_MASK, OP_LDURB << 21, "LDURB", handle_ldurb},
     {OP_MASK, OP_LDURH << 21, "LDURH", handle_ldurh},
-    {OP_MASK, OP_MOVZ << 21, "MOVZ", handle_movz}
+    {OP_MASK, OP_MOVZ << 21, "MOVZ", handle_movz},
+    {OP_MASK_BRANCH, OP_BRANCH << 26, "BRANCH", handle_branch},
+    {OP_MASK_BR, OP_BR << 10, "BR", handle_br},
+    {OP_MASK_BCOND, OP_BCOND << 24, "BCOND", handle_bcond},
 };
 
-void process_instruction() {
+void process_instruction()
+{
     uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
-    printf("Executing instruction: 0x%08x at PC: 0x%016lx\n", instruction, CURRENT_STATE.PC);
+    // printf("Executing instruction: 0x%08x at PC: 0x%016lx\n", instruction, CURRENT_STATE.PC);
 
-    for (size_t i = 0; i < INSTRUCTION_TABLE_SIZE; i++) {
+    for (size_t i = 0; i < INSTRUCTION_TABLE_SIZE; i++)
+    {
         instruction_t *entry = &instruction_table[i];
-        if ((instruction & entry->mask) == entry->pattern) {
+        if ((instruction & entry->mask) == entry->pattern)
+        {
             entry->handler(instruction);
             return;
         }
@@ -43,13 +49,15 @@ void process_instruction() {
     HANDLERS
 */
 
-static void handle_halt(uint32_t instruction) {
+static void handle_halt(uint32_t instruction)
+{
     printf("[HALT]\n");
     RUN_BIT = 0;
     NEXT_STATE.PC = CURRENT_STATE.PC + 4;
 }
 
-static void handle_adds_ext(uint32_t instruction) {
+static void handle_adds_ext(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
@@ -62,46 +70,53 @@ static void handle_adds_ext(uint32_t instruction) {
     printf("[ADDS] X%d, X%d, X%d => 0x%016lx\n", rd, rn, rm, result);
 }
 
-static void handle_adds_imm(uint32_t instruction) {
+static void handle_adds_imm(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t imm = extract_field(instruction, IMM12_MASK, IMM12_SHIFT);
     uint8_t shift = extract_field(instruction, SHIFT1_MASK, SHIFT1_SHIFT);
 
-    if(shift) imm <<= 12;
-    
+    if (shift)
+        imm <<= 12;
+
     uint64_t result = CURRENT_STATE.REGS[rn] + imm;
     NEXT_STATE.REGS[rd] = result;
     set_flags_z_n(&NEXT_STATE, result);
 
     NEXT_STATE.PC += 4;
-    printf("[ADDS IMM] X%d, X%d, #0x%lx (shift: %d) => 0x%016lx\n", 
+    printf("[ADDS IMM] X%d, X%d, #0x%lx (shift: %d) => 0x%016lx\n",
            rd, rn, imm, shift, result);
 }
 
-static void handle_subs_ext(uint32_t instruction) {
+static void handle_subs_ext(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
 
     uint64_t result = CURRENT_STATE.REGS[rn] - CURRENT_STATE.REGS[rm];
-    if(rd != 31) NEXT_STATE.REGS[rd] = result;
+    if (rd != 31)
+        NEXT_STATE.REGS[rd] = result;
     set_flags_z_n(&NEXT_STATE, result);
 
     NEXT_STATE.PC += 4;
     printf("[SUBS/CMP] X%d, X%d, X%d => 0x%016lx\n", rd, rn, rm, result);
 }
 
-static void handle_subs_imm(uint32_t instruction) {
+static void handle_subs_imm(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t imm = extract_field(instruction, IMM12_MASK, IMM12_SHIFT);
     uint8_t shift = extract_field(instruction, SHIFT1_MASK, SHIFT1_SHIFT);
 
-    if(shift) imm <<= 12;
-    
+    if (shift)
+        imm <<= 12;
+
     uint64_t result = CURRENT_STATE.REGS[rn] - imm;
-    if(rd != 31) NEXT_STATE.REGS[rd] = result;
+    if (rd != 31)
+        NEXT_STATE.REGS[rd] = result;
     set_flags_z_n(&NEXT_STATE, result);
 
     NEXT_STATE.PC += 4;
@@ -109,7 +124,8 @@ static void handle_subs_imm(uint32_t instruction) {
            rd, rn, imm, shift, result);
 }
 
-static void handle_ands_shift(uint32_t instruction) {
+static void handle_ands_shift(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
@@ -118,7 +134,7 @@ static void handle_ands_shift(uint32_t instruction) {
 
     uint64_t shifted = apply_shift(CURRENT_STATE.REGS[rm], shift_type, shift_amount);
     uint64_t result = CURRENT_STATE.REGS[rn] & shifted;
-    
+
     NEXT_STATE.REGS[rd] = result;
     set_flags_z_n(&NEXT_STATE, result);
 
@@ -127,7 +143,8 @@ static void handle_ands_shift(uint32_t instruction) {
            rd, rn, rm, shift_type_to_str(shift_type), shift_amount, result);
 }
 
-static void handle_eor_shift(uint32_t instruction) {
+static void handle_eor_shift(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
@@ -136,14 +153,15 @@ static void handle_eor_shift(uint32_t instruction) {
 
     uint64_t shifted = apply_shift(CURRENT_STATE.REGS[rm], shift_type, shift_amount);
     uint64_t result = CURRENT_STATE.REGS[rn] ^ shifted;
-    
+
     NEXT_STATE.REGS[rd] = result;
     NEXT_STATE.PC += 4;
     printf("[EOR] X%d, X%d, X%d %s #%d => 0x%016lx\n",
            rd, rn, rm, shift_type_to_str(shift_type), shift_amount, result);
 }
 
-static void handle_orr_shift(uint32_t instruction) {
+static void handle_orr_shift(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
@@ -152,14 +170,15 @@ static void handle_orr_shift(uint32_t instruction) {
 
     uint64_t shifted = apply_shift(CURRENT_STATE.REGS[rm], shift_type, shift_amount);
     uint64_t result = CURRENT_STATE.REGS[rn] | shifted;
-    
+
     NEXT_STATE.REGS[rd] = result;
     NEXT_STATE.PC += 4;
     printf("[ORR] X%d, X%d, X%d %s #%d => 0x%016lx\n",
            rd, rn, rm, shift_type_to_str(shift_type), shift_amount, result);
 }
 
-static void handle_stur(uint32_t instruction) {
+static void handle_stur(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
@@ -172,7 +191,8 @@ static void handle_stur(uint32_t instruction) {
            rt, rn, offset, CURRENT_STATE.REGS[rt]);
 }
 
-static void handle_sturb(uint32_t instruction) {
+static void handle_sturb(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
@@ -186,7 +206,8 @@ static void handle_sturb(uint32_t instruction) {
            rt, rn, offset, data);
 }
 
-static void handle_sturh(uint32_t instruction) {
+static void handle_sturh(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
@@ -200,7 +221,8 @@ static void handle_sturh(uint32_t instruction) {
            rt, rn, offset, data);
 }
 
-static void handle_ldur(uint32_t instruction) {
+static void handle_ldur(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
@@ -214,7 +236,8 @@ static void handle_ldur(uint32_t instruction) {
            rt, rn, offset, data);
 }
 
-static void handle_ldurb(uint32_t instruction){
+static void handle_ldurb(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
@@ -228,7 +251,8 @@ static void handle_ldurb(uint32_t instruction){
            rt, rn, offset, data);
 }
 
-static void handle_ldurh(uint32_t instruction){
+static void handle_ldurh(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
@@ -242,49 +266,138 @@ static void handle_ldurh(uint32_t instruction){
            rt, rn, offset, data);
 }
 
-static void handle_movz(uint32_t instruction) {
+static void handle_movz(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint64_t imm = extract_field(instruction, IMM16_MASK, IMM16_SHIFT);
     uint8_t shift = extract_field(instruction, HW_MASK, HW_SHIFT);
 
-    if (shift == 0) {
-        NEXT_STATE.REGS[rd] = imm;  // Guardar imm en los bits 0-15 del registro
-        set_flags_z_n(&NEXT_STATE, imm);  // Actualizar los flags Z y N
+    if (shift == 0)
+    {
+        NEXT_STATE.REGS[rd] = imm;       // Guardar imm en los bits 0-15 del registro
+        set_flags_z_n(&NEXT_STATE, imm); // Actualizar los flags Z y N
         printf("[MOVZ] X%d, #0x%lx => 0x%016lx\n", rd, imm, imm);
     }
 
     NEXT_STATE.PC += 4;
 }
 
+static void handle_branch(uint32_t instruction)
+{
+    uint32_t imm26 = extract_field(instruction, IMM26_MASK, 0);
+    uint64_t offset = ((int64_t)(imm26 << 6)) >> 4; // Sign extend
+
+    NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+    printf("[BRANCH] #%ld\n", offset);
+}
+
+static void handle_br(uint32_t instruction)
+{
+    uint8_t rm = extract_field(instruction, 0xFC0, 5);
+    uint64_t offset = CURRENT_STATE.REGS[rm];
+    NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+    printf("[BR] X%d => #%ld\n", rm, offset);
+}
+
+static void handle_bcond(uint32_t instruction)
+{
+    uint8_t cond = extract_field(instruction, COND_MASK, 0);
+    uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
+    uint64_t offset = ((int64_t)(imm19 << 13)) >> 11; // ACA ESTA EL PROBLEMA SEGURO !!!!!
+
+    if (check_condition(cond))
+    {
+        NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+        printf("[BCOND] #%ld\n", offset);
+    }
+    else
+    {
+        NEXT_STATE.PC += 4;
+        printf("[BCOND] Not taken\n");
+    }
+}
 
 /*
     HELPER FUNCTIONS
 */
 
-static inline uint32_t extract_field(uint32_t instruction, uint32_t mask, uint8_t shift) {
+static inline uint32_t extract_field(uint32_t instruction, uint32_t mask, uint8_t shift)
+{
     return (instruction & mask) >> shift;
 }
 
-static uint64_t apply_shift(uint64_t value, ShiftType type, uint32_t amount) {
-    if(amount == 0) return value;  // No shift needed
-    
-    switch(type) {
-        case SHIFT_LSL: return value << amount;
-        case SHIFT_LSR: return value >> amount;
-        case SHIFT_ASR: return (int64_t)value >> amount;
-        case SHIFT_ROR: return (value >> amount) | (value << (64 - amount));
-        default:
-            assert(0 && "Invalid shift type");
-            return value;
+static uint64_t apply_shift(uint64_t value, ShiftType type, uint32_t amount)
+{
+    if (amount == 0)
+        return value; // No shift needed
+
+    switch (type)
+    {
+    case SHIFT_LSL:
+        return value << amount;
+    case SHIFT_LSR:
+        return value >> amount;
+    case SHIFT_ASR:
+        return (int64_t)value >> amount;
+    case SHIFT_ROR:
+        return (value >> amount) | (value << (64 - amount));
+    default:
+        assert(0 && "Invalid shift type");
+        return value;
     }
 }
 
-static void set_flags_z_n(CPU_State *state, uint64_t result) {
+static void set_flags_z_n(CPU_State *state, uint64_t result)
+{
     state->FLAG_Z = (result == 0) ? 1 : 0;
-    state->FLAG_N = (result >> 63) & 1;  // Usamos el bit más significativo
+    state->FLAG_N = (result >> 63) & 1; // Usamos el bit más significativo
 }
 
-static const char* shift_type_to_str(ShiftType type) {
-    static const char* names[] = {"LSL", "LSR", "ASR", "ROR"};
+static const char *shift_type_to_str(ShiftType type)
+{
+    static const char *names[] = {"LSL", "LSR", "ASR", "ROR"};
     return names[type];
+}
+
+static bool check_condition(uint8_t cond)
+{
+    switch (cond)
+    {
+    case 0x0: // BEQ
+        return CURRENT_STATE.FLAG_Z == 1;
+    case 0x1: // BNE
+        return CURRENT_STATE.FLAG_Z == 0;
+    case 0x2: // BCS
+        return FLAG_C == 1;
+    case 0x3: // BCC
+        return FLAG_C == 0;
+    case 0x4: // BMI
+        return CURRENT_STATE.FLAG_N == 1;
+    case 0x5: // BPL
+        return CURRENT_STATE.FLAG_N == 0;
+    case 0x6: // BVS
+        return FLAG_V == 1;
+    case 0x7: // BVC
+        return FLAG_V == 0;
+    case 0x8: // BHI
+        return (FLAG_C == 1 && CURRENT_STATE.FLAG_Z == 0);
+    case 0x9: // BLS
+        return !(FLAG_C == 1 && CURRENT_STATE.FLAG_Z == 0);
+    case 0xA: // BGE
+        return (CURRENT_STATE.FLAG_N == FLAG_V);
+    case 0xB: // BLT
+        return (CURRENT_STATE.FLAG_N != FLAG_V);
+    case 0xC: // BGT
+        return (CURRENT_STATE.FLAG_Z == 0 && (CURRENT_STATE.FLAG_N == FLAG_V));
+    case 0xD: // BLE
+        return (CURRENT_STATE.FLAG_Z == 0 && (CURRENT_STATE.FLAG_N != FLAG_V));
+    case 0xE: // Undefined
+        return false;
+    case 0xF: // Always
+        return true;
+
+    default:
+        assert(0 && "Invalid condition code");
+        return false;
+    }
 }
