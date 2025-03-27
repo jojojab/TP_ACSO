@@ -13,6 +13,13 @@ instruction_t instruction_table[] = {
     {OP_MASK, OP_ANDS_SHIFT << 21, "ANDS_SHIFT", handle_ands_shift},
     {OP_MASK, OP_EOR_SHIFT << 21, "EOR_SHIFT", handle_eor_shift},
     {OP_MASK, OP_ORR_SHIFT << 21, "ORR_SHIFT", handle_orr_shift},
+    {OP_MASK, OP_STUR << 21, "STUR", handle_stur},
+    {OP_MASK, OP_STURB << 21, "STURB", handle_sturb},
+    {OP_MASK, OP_STURH << 21, "STURH", handle_sturh},
+    {OP_MASK, OP_LDUR << 21, "LDUR", handle_ldur},
+    {OP_MASK, OP_LDURB << 21, "LDURB", handle_ldurb},
+    {OP_MASK, OP_LDURH << 21, "LDURH", handle_ldurh},
+    {OP_MASK, OP_MOVZ << 21, "MOVZ", handle_movz}
 };
 
 void process_instruction() {
@@ -151,6 +158,104 @@ static void handle_orr_shift(uint32_t instruction) {
     printf("[ORR] X%d, X%d, X%d %s #%d => 0x%016lx\n",
            rd, rn, rm, shift_type_to_str(shift_type), shift_amount, result);
 }
+
+static void handle_stur(uint32_t instruction) {
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    mem_write_32(address, CURRENT_STATE.REGS[rt]);
+
+    NEXT_STATE.PC += 4;
+    printf("[STUR] X%d, [X%d, #0x%lx] => 0x%016lx\n",
+           rt, rn, offset, CURRENT_STATE.REGS[rt]);
+}
+
+static void handle_sturb(uint32_t instruction) {
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint8_t data = CURRENT_STATE.REGS[rt] & 0xFF;
+    mem_write_32(address, data);
+
+    NEXT_STATE.PC += 4;
+    printf("[STURB] X%d, [X%d, #0x%lx] => 0x%02x\n",
+           rt, rn, offset, data);
+}
+
+static void handle_sturh(uint32_t instruction) {
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint16_t data = CURRENT_STATE.REGS[rt] & 0xFFFF;
+    mem_write_32(address, data);
+
+    NEXT_STATE.PC += 4;
+    printf("[STURH] X%d, [X%d, #0x%lx] => 0x%04x\n",
+           rt, rn, offset, data);
+}
+
+static void handle_ldur(uint32_t instruction) {
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint32_t data = mem_read_32(address);
+    NEXT_STATE.REGS[rt] = data;
+
+    NEXT_STATE.PC += 4;
+    printf("[LDUR] X%d, [X%d, #0x%lx] => 0x%08x\n",
+           rt, rn, offset, data);
+}
+
+static void handle_ldurb(uint32_t instruction){
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint8_t data = mem_read_32(address) & 0xFF;
+    NEXT_STATE.REGS[rt] = (uint64_t)data;
+
+    NEXT_STATE.PC += 4;
+    printf("[LDURB] X%d, [X%d, #0x%lx] => 0x%02x\n",
+           rt, rn, offset, data);
+}
+
+static void handle_ldurh(uint32_t instruction){
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint16_t data = mem_read_32(address) & 0xFFFF;
+    NEXT_STATE.REGS[rt] = (uint64_t)data;
+
+    NEXT_STATE.PC += 4;
+    printf("[LDURH] X%d, [X%d, #0x%lx] => 0x%04x\n",
+           rt, rn, offset, data);
+}
+
+static void handle_movz(uint32_t instruction) {
+    uint8_t rd = extract_field(instruction, RD_MASK, 0);
+    uint64_t imm = extract_field(instruction, IMM16_MASK, IMM16_SHIFT);
+    uint8_t shift = extract_field(instruction, HW_MASK, HW_SHIFT);
+
+    if (shift == 0) {
+        NEXT_STATE.REGS[rd] = imm;  // Guardar imm en los bits 0-15 del registro
+        set_flags_z_n(&NEXT_STATE, imm);  // Actualizar los flags Z y N
+        printf("[MOVZ] X%d, #0x%lx => 0x%016lx\n", rd, imm, imm);
+    }
+
+    NEXT_STATE.PC += 4;
+}
+
 
 /*
     HELPER FUNCTIONS
