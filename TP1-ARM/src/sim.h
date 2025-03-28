@@ -8,7 +8,6 @@
 #define FLAG_V 0
 
 /* Máscaras y desplazamientos para campos de instrucción */
-#define OP_MASK 0xFFE00000
 #define RD_MASK 0x0000001F
 #define RN_MASK 0x000003E0
 #define RM_MASK 0x001F0000
@@ -56,15 +55,16 @@
 #define OP_LDUR 0x7C2
 #define OP_LDURB 0x1C2
 #define OP_LDURH 0x3C2
-#define OP_MOVZ 0x694
+#define OP_MOVZ 0x1A5
 #define OP_LSL 0x69A
 
 /* Mascaras opcodes por categoria */
+#define OP_MASK 0xFFE00000
 #define OP_MASK_BRANCH 0xFC000000
 #define OP_MASK_BR 0xFFFFFC00
 #define OP_MASK_BCOND 0xFF000000
-
 #define OP_MASK_LSL 0xFFC00000
+#define OP_MASK_MOVZ 0xFF000000
 
 /* Patrones */
 #define OP_BRANCH 0x5
@@ -109,7 +109,6 @@ static void handle_branch(uint32_t instruction);
 static void handle_br(uint32_t instruction);
 static void handle_bcond(uint32_t instruction);
 static void handle_lsl(uint32_t instruction);
-
 
 /* Declaración de funciones helper */
 static inline uint32_t extract_field(uint32_t instruction, uint32_t mask, uint8_t shift);

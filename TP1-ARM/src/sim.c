@@ -19,7 +19,7 @@ instruction_t instruction_table[] = {
     {OP_MASK, OP_LDUR << 21, "LDUR", handle_ldur},
     {OP_MASK, OP_LDURB << 21, "LDURB", handle_ldurb},
     {OP_MASK, OP_LDURH << 21, "LDURH", handle_ldurh},
-    {OP_MASK, OP_MOVZ << 21, "MOVZ", handle_movz},
+    {OP_MASK, OP_MOVZ << 23, "MOVZ", handle_movz},
     {OP_MASK_BRANCH, OP_BRANCH << 26, "BRANCH", handle_branch},
     {OP_MASK_BR, OP_BR << 10, "BR", handle_br},
     {OP_MASK_BCOND, OP_BCOND << 24, "BCOND", handle_bcond},
@@ -29,8 +29,6 @@ instruction_t instruction_table[] = {
 void process_instruction()
 {
     uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
-//     printf("Executing instruction: 0x%08x at PC: 0x%016lx\n", instruction, CURRENT_STATE.PC);
-//    printf("Opcode: 0x%03x\n", (instruction >> 22) & 0xFFC);
 
     for (size_t i = 0; i < INSTRUCTION_TABLE_SIZE; i++)
     {
@@ -42,7 +40,6 @@ void process_instruction()
         }
     }
 
-    // Instrucción no reconocida
     printf("Unknown instruction: 0x%08x\n", instruction);
     NEXT_STATE.PC += 4;
 }
@@ -271,13 +268,13 @@ static void handle_ldurh(uint32_t instruction)
 static void handle_movz(uint32_t instruction)
 {
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
-    uint64_t imm = extract_field(instruction, IMM16_MASK, IMM16_SHIFT);
-    uint8_t shift = extract_field(instruction, HW_MASK, HW_SHIFT);
+    uint64_t imm = extract_field(instruction, 0x1FFFE0, 5);
+    uint8_t shift = extract_field(instruction, 0x200000, 21);
 
     if (shift == 0)
     {
-        NEXT_STATE.REGS[rd] = imm;       // Guardar imm en los bits 0-15 del registro
-        set_flags_z_n(&NEXT_STATE, imm); // Actualizar los flags Z y N
+        NEXT_STATE.REGS[rd] = imm;
+        set_flags_z_n(&NEXT_STATE, imm);
         printf("[MOVZ] X%d, #0x%lx => 0x%016lx\n", rd, imm, imm);
     }
 
@@ -287,7 +284,7 @@ static void handle_movz(uint32_t instruction)
 static void handle_branch(uint32_t instruction)
 {
     uint32_t imm26 = extract_field(instruction, IMM26_MASK, 0);
-    uint64_t offset = ((int64_t)(imm26 << 6)) >> 4; // Sign extend
+    uint64_t offset = ((int64_t)(imm26 << 6)) >> 4;
 
     NEXT_STATE.PC = CURRENT_STATE.PC + offset;
     printf("[BRANCH] #%ld\n", offset);
@@ -319,7 +316,8 @@ static void handle_bcond(uint32_t instruction)
     }
 }
 
-static void handle_lsl(uint32_t instruction) {
+static void handle_lsl(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t immr = extract_field(instruction, IMMR_MASK, IMMR_SHIFT);
@@ -329,12 +327,7 @@ static void handle_lsl(uint32_t instruction) {
     NEXT_STATE.REGS[rd] = shifted;
     NEXT_STATE.PC += 4;
     printf("[LSL] X%d, X%d, #%d, #%d\n", rd, rn, immr, imms);
-
 }
-
-
-
-
 
 /*
     HELPER FUNCTIONS
