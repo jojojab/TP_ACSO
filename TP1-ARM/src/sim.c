@@ -23,12 +23,14 @@ instruction_t instruction_table[] = {
     {OP_MASK_BRANCH, OP_BRANCH << 26, "BRANCH", handle_branch},
     {OP_MASK_BR, OP_BR << 10, "BR", handle_br},
     {OP_MASK_BCOND, OP_BCOND << 24, "BCOND", handle_bcond},
+    {OP_MASK_LSL, OP_LSL << 21, "LSL", handle_lsl},
 };
 
 void process_instruction()
 {
     uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
-    // printf("Executing instruction: 0x%08x at PC: 0x%016lx\n", instruction, CURRENT_STATE.PC);
+//     printf("Executing instruction: 0x%08x at PC: 0x%016lx\n", instruction, CURRENT_STATE.PC);
+//    printf("Opcode: 0x%03x\n", (instruction >> 22) & 0xFFC);
 
     for (size_t i = 0; i < INSTRUCTION_TABLE_SIZE; i++)
     {
@@ -303,7 +305,7 @@ static void handle_bcond(uint32_t instruction)
 {
     uint8_t cond = extract_field(instruction, COND_MASK, 0);
     uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
-    uint64_t offset = ((int64_t)(imm19 << 13)) >> 11; // ACA ESTA EL PROBLEMA SEGURO !!!!!
+    uint64_t offset = ((int32_t)(imm19 << 13)) >> 11;
 
     if (check_condition(cond))
     {
@@ -316,6 +318,23 @@ static void handle_bcond(uint32_t instruction)
         printf("[BCOND] Not taken\n");
     }
 }
+
+static void handle_lsl(uint32_t instruction) {
+    uint8_t rd = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint8_t immr = extract_field(instruction, IMMR_MASK, IMMR_SHIFT);
+    uint8_t imms = extract_field(instruction, IMMS_MASK, IMMS_SHIFT);
+
+    uint64_t shifted = apply_shift(CURRENT_STATE.REGS[rn], SHIFT_LSL, 64 - immr);
+    NEXT_STATE.REGS[rd] = shifted;
+    NEXT_STATE.PC += 4;
+    printf("[LSL] X%d, X%d, #%d, #%d\n", rd, rn, immr, imms);
+
+}
+
+
+
+
 
 /*
     HELPER FUNCTIONS

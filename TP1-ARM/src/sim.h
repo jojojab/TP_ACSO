@@ -23,6 +23,9 @@
 #define COND_MASK 0x0000000F
 #define IMM19_MASK 0x00FFFFE0
 
+#define IMMR_MASK 0x003F0000
+#define IMMS_MASK 0x0000F800
+
 /* Desplazamientos */
 #define RN_SHIFT 5
 #define RM_SHIFT 16
@@ -33,6 +36,9 @@
 #define IMM9_SHIFT 12
 #define IMM16_SHIFT 5
 #define HW_SHIFT 21
+
+#define IMMR_SHIFT 16
+#define IMMS_SHIFT 10
 
 /* Opcodes */
 #define OP_HALT 0x6A2
@@ -50,12 +56,15 @@
 #define OP_LDUR 0x7C2
 #define OP_LDURB 0x1C2
 #define OP_LDURH 0x3C2
-#define OP_MOVZ 0x528
+#define OP_MOVZ 0x694
+#define OP_LSL 0x69A
 
 /* Mascaras opcodes por categoria */
 #define OP_MASK_BRANCH 0xFC000000
 #define OP_MASK_BR 0xFFFFFC00
 #define OP_MASK_BCOND 0xFF000000
+
+#define OP_MASK_LSL 0xFFC00000
 
 /* Patrones */
 #define OP_BRANCH 0x5
@@ -99,6 +108,7 @@ static void handle_movz(uint32_t instruction);
 static void handle_branch(uint32_t instruction);
 static void handle_br(uint32_t instruction);
 static void handle_bcond(uint32_t instruction);
+static void handle_lsl(uint32_t instruction);
 
 
 /* Declaración de funciones helper */
