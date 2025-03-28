@@ -23,7 +23,7 @@ instruction_t instruction_table[] = {
     {OP_MASK_BRANCH, OP_BRANCH << 26, "BRANCH", handle_branch},
     {OP_MASK_BR, OP_BR << 10, "BR", handle_br},
     {OP_MASK_BCOND, OP_BCOND << 24, "BCOND", handle_bcond},
-    {OP_MASK_LSL, OP_LSL << 21, "LSL", handle_lsl},
+    {OP_MASK_LSL, OP_LSL << 23, "LSL", handle_lsl},
 };
 
 void process_instruction()

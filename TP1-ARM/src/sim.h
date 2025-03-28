@@ -23,7 +23,7 @@
 #define IMM19_MASK 0x00FFFFE0
 
 #define IMMR_MASK 0x003F0000
-#define IMMS_MASK 0x0000F800
+#define IMMS_MASK 0x0000FC00
 
 /* Desplazamientos */
 #define RN_SHIFT 5
@@ -56,14 +56,14 @@
 #define OP_LDURB 0x1C2
 #define OP_LDURH 0x3C2
 #define OP_MOVZ 0x1A5
-#define OP_LSL 0x69A
+#define OP_LSL 0x1A6
 
 /* Mascaras opcodes por categoria */
 #define OP_MASK 0xFFE00000
 #define OP_MASK_BRANCH 0xFC000000
 #define OP_MASK_BR 0xFFFFFC00
 #define OP_MASK_BCOND 0xFF000000
-#define OP_MASK_LSL 0xFFC00000
+#define OP_MASK_LSL 0xFF800000
 #define OP_MASK_MOVZ 0xFF000000
 
 /* Patrones */
