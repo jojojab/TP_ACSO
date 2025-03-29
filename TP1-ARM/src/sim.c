@@ -23,7 +23,10 @@ instruction_t instruction_table[] = {
     {OP_MASK_BRANCH, OP_BRANCH << 26, "BRANCH", handle_branch},
     {OP_MASK_BR, OP_BR << 10, "BR", handle_br},
     {OP_MASK_BCOND, OP_BCOND << 24, "BCOND", handle_bcond},
-    {OP_MASK_LSL, OP_LSL << 23, "LSL", handle_lsl},
+    {OP_MASK_LSL, OP_LSL << 23, "LSL", handle_lsl_lsr},
+    {OP_MASK, OP_MUL << 21, "MUL", handle_mul},
+    {OP_MASK_BCOND, OP_CBZ << 24, "CBZ", handle_cbz},
+    {OP_MASK_BCOND, OP_CBNZ << 24, "CBNZ", handle_cbnz},
 };
 
 void process_instruction()
@@ -316,18 +319,81 @@ static void handle_bcond(uint32_t instruction)
     }
 }
 
-static void handle_lsl(uint32_t instruction)
+static void handle_lsl_lsr(uint32_t instruction)
 {
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t immr = extract_field(instruction, IMMR_MASK, IMMR_SHIFT);
     uint8_t imms = extract_field(instruction, IMMS_MASK, IMMS_SHIFT);
 
-    uint64_t shifted = apply_shift(CURRENT_STATE.REGS[rn], SHIFT_LSL, 64 - immr);
-    NEXT_STATE.REGS[rd] = shifted;
+//    printf("IMMR: %d, IMMS: %d, RN: %d, RD:  %d\n", immr, imms, rn, rd);
+
+    uint64_t value = CURRENT_STATE.REGS[rn];
+    uint64_t result;
+    char *shift_type;
+
+    if (imms == 0x3F){
+        shift_type = "LSR";
+        result = apply_shift(value, SHIFT_LSR, immr);
+    }
+    else{
+        shift_type = "LSL";
+        result = apply_shift(value, SHIFT_LSL, 64 - immr);
+    }
+
+    NEXT_STATE.REGS[rd] = result;
     NEXT_STATE.PC += 4;
-    printf("[LSL] X%d, X%d, #%d, #%d\n", rd, rn, immr, imms);
+    printf("[%s] X%d, X%d, #%d, #%d => 0x%016lx\n", shift_type, rd, rn, immr, imms, result);
+
 }
+
+static void handle_mul(uint32_t instruction) {
+    uint8_t rd = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
+
+    uint64_t result = CURRENT_STATE.REGS[rn] * CURRENT_STATE.REGS[rm];
+    NEXT_STATE.REGS[rd] = result;
+    set_flags_z_n(&NEXT_STATE, result);
+
+    NEXT_STATE.PC += 4;
+    printf("[MUL] X%d, X%d, X%d => 0x%016lx\n", rd, rn, rm, result);
+}
+
+static void handle_cbz(uint32_t instruction) {
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
+
+    // Correct sign extension and word alignment
+    int64_t offset = ((int32_t)(imm19 << 13)) >> 11;  // Sign extend imm19 and shift correctly
+    offset *= 4;  // Ensure offset is word-aligned
+
+    if (CURRENT_STATE.REGS[rt] == 0) {
+        NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+        printf("[CBZ] X%d == 0, Branch to 0x%lx\n", rt, NEXT_STATE.PC);
+    } else {
+        NEXT_STATE.PC += 4;
+        printf("[CBZ] X%d != 0, No branch\n", rt);
+    }
+}
+
+static void handle_cbnz(uint32_t instruction) {
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
+
+    // Correct sign extension and word alignment
+    int64_t offset = ((int32_t)(imm19 << 13)) >> 11;  // Sign extend imm19 and shift correctly
+    offset *= 4;  // Ensure offset is word-aligned
+
+    if (CURRENT_STATE.REGS[rt] != 0) {
+        NEXT_STATE.PC = CURRENT_STATE.PC + offset;
+        printf("[CBNZ] X%d != 0, Branch to 0x%lx\n", rt, NEXT_STATE.PC);
+    } else {
+        NEXT_STATE.PC += 4;
+        printf("[CBNZ] X%d == 0, No branch\n", rt);
+    }
+}
+
 
 /*
     HELPER FUNCTIONS

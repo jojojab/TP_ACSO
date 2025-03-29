@@ -57,6 +57,7 @@
 #define OP_LDURH 0x3C2
 #define OP_MOVZ 0x1A5
 #define OP_LSL 0x1A6
+#define OP_MUL 0x4D8
 
 /* Mascaras opcodes por categoria */
 #define OP_MASK 0xFFE00000
@@ -70,6 +71,8 @@
 #define OP_BRANCH 0x5
 #define OP_BR 0x3587C0
 #define OP_BCOND 0x54
+#define OP_CBZ 0xB5
+#define OP_CBNZ 0x35
 
 #define INSTRUCTION_TABLE_SIZE (sizeof(instruction_table) / sizeof(instruction_table[0]))
 
@@ -108,7 +111,10 @@ static void handle_movz(uint32_t instruction);
 static void handle_branch(uint32_t instruction);
 static void handle_br(uint32_t instruction);
 static void handle_bcond(uint32_t instruction);
-static void handle_lsl(uint32_t instruction);
+static void handle_lsl_lsr(uint32_t instruction);
+static void handle_mul(uint32_t instruction);
+static void handle_cbz(uint32_t instruction);
+static void handle_cbnz(uint32_t instruction);
 
 /* Declaración de funciones helper */
 static inline uint32_t extract_field(uint32_t instruction, uint32_t mask, uint8_t shift);
