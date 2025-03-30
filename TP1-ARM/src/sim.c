@@ -197,15 +197,15 @@ static void handle_sturb(uint32_t instruction)
 {
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
-    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+    int64_t offset = (int64_t)(int16_t)(extract_field(instruction, IMM9_MASK, IMM9_SHIFT) << 7) >> 7;
 
-    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint64_t address =  CURRENT_STATE.REGS[rn];
+    address += offset;
     uint8_t data = CURRENT_STATE.REGS[rt] & 0xFF;
     mem_write_32(address, data);
 
     NEXT_STATE.PC += 4;
-    printf("[STURB] X%d, [X%d, #0x%lx] => 0x%02x\n",
-           rt, rn, offset, data);
+    printf("[STURB] X%d, [X%d, #0x%lx] => 0x%02x\n", rt, rn, offset, data);
 }
 
 static void handle_sturh(uint32_t instruction)
@@ -225,16 +225,19 @@ static void handle_sturh(uint32_t instruction)
 
 static void handle_ldur(uint32_t instruction)
 {
-    uint8_t rt = extract_field(instruction, RD_MASK, 0);
-    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
-    uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);          // Registro destino (Xt)
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);   // Registro base (Xn o SP)
+    int64_t offset = (int64_t)(int16_t)(extract_field(instruction, IMM9_MASK, IMM9_SHIFT) << 7) >> 7; // Sign-extend IMM9
 
-    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
-    uint32_t data = mem_read_32(address);
-    NEXT_STATE.REGS[rt] = data;
+    // Calcular la dirección base: usar SP si Rn = 31, Xn de lo contrario
+    uint64_t address = CURRENT_STATE.REGS[rn];
+    address += offset;                                            // Sumar el offset con signo
 
-    NEXT_STATE.PC += 4;
-    printf("[LDUR] X%d, [X%d, #0x%lx] => 0x%08x\n",
+    uint64_t data = mem_read_32(address);                         // Cargar 64 bits
+    NEXT_STATE.REGS[rt] = data;                                   // Almacenar en Xt
+
+    NEXT_STATE.PC += 4;                                           // Avanzar PC
+    printf("[LDUR] X%d, [X%d, #0x%lx] => 0x%016lx\n",            // Imprimir valor de 64 bits
            rt, rn, offset, data);
 }
 
