@@ -10,6 +10,8 @@ instruction_t instruction_table[] = {
     {OP_MASK, OP_ADDS_IMM << 21, "ADDS_IMM", handle_adds_imm},
     {OP_MASK, OP_SUBS_EXT << 21, "SUBS_EXT", handle_subs_ext},
     {OP_MASK, OP_SUBS_IMM << 21, "SUBS_IMM", handle_subs_imm},
+    {OP_MASK, 0x459 << 21, "ADD_EXT", handle_add_ext},
+    {OP_MASK_ADD, 0x122 << 23, "ADD_IMM", handle_add_imm},
     {OP_MASK, OP_ANDS_SHIFT << 21, "ANDS_SHIFT", handle_ands_shift},
     {OP_MASK, OP_EOR_SHIFT << 21, "EOR_SHIFT", handle_eor_shift},
     {OP_MASK, OP_ORR_SHIFT << 21, "ORR_SHIFT", handle_orr_shift},
@@ -395,6 +397,123 @@ static void handle_cbnz(uint32_t instruction) {
         NEXT_STATE.PC += 4;
         printf("[CBNZ] X%d == 0, No branch\n", rt);
     }
+}
+
+static void handle_add_imm(uint32_t instruction)
+{
+    // Extraer campos
+    uint8_t rd = extract_field(instruction, RD_MASK, 0);              // Registro destino (Xd)
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);       // Registro base (Xn)
+    uint64_t imm12 = extract_field(instruction, IMM12_MASK, IMM12_SHIFT); // Inmediato de 12 bits
+    uint8_t sh = extract_field(instruction, SHIFT1_MASK, SHIFT1_SHIFT);   // Bit de shift (0 o 1)
+
+    int datasize = 64;
+
+    uint64_t imm;
+    if (sh == 0) {
+        imm = imm12;          // Sin desplazamiento
+    } else {
+        imm = imm12 << 12;    // Desplazado 12 bits a la izquierda
+    }
+
+    // Obtener operando 1 (Xn o SP)
+    uint64_t operand1;
+    operand1 = CURRENT_STATE.REGS[rn];
+
+    // Operando 2: Extender el inmediato a datasize
+    uint64_t operand2 = imm;
+
+    // Realizar la suma
+    uint64_t result = operand1 + operand2;
+
+    // Almacenar el resultado
+    NEXT_STATE.REGS[rd] = result;
+
+    // Avanzar el PC
+    NEXT_STATE.PC += 4;
+
+    // Impresión de depuración
+    printf("[ADD] %s%d, %s%d, #0x%lx (sh=%d) => 0x%016lx\n",
+           (rd == 31) ? "SP" : "X", rd,
+           (rn == 31) ? "SP" : "X", rn,
+           imm, sh, result);
+}
+
+static void handle_add_ext(uint32_t instruction)
+{
+    // Extraer campos
+    uint8_t rd = extract_field(instruction, RD_MASK, 0);          // Registro destino (Xd)
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);   // Registro base (Xn)
+    uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);   // Registro a extender (Xm)
+    uint8_t imm3 = extract_field(instruction, IMM3_MASK, 9); // Shift (0-4)
+    uint8_t option = extract_field(instruction, OPTION_MASK, 13); // Tipo de extensión
+    uint8_t sf = 1;
+
+    // Validar imm3 (shift)
+    if (imm3 >= 5) {  // 101, 110, 111 son indefinidos
+        printf("[ADD EXT] Undefined instruction: imm3 = %d\n", imm3);
+        NEXT_STATE.PC += 4;
+        return;
+    }
+    uint8_t shift = imm3;
+
+    // Determinar tamaño de datos
+    int datasize = 32 << sf;  // 32 si sf = 0, 64 si sf = 1
+
+    // Obtener operando 1 (Xn o SP)
+    uint64_t operand1;
+    operand1 = CURRENT_STATE.REGS[rn];
+    if (datasize == 32) operand1 &= 0xFFFFFFFF;
+
+    // Obtener operando 2 (extender Rm)
+    uint64_t operand2;
+    switch (option) {
+        case 0: // UXTB
+            operand2 = (uint8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
+            break;
+        case 1: // UXTH
+            operand2 = (uint16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
+            break;
+        case 2: // UXTW
+            operand2 = (uint32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
+            break;
+        case 3: // UXTX
+            operand2 = CURRENT_STATE.REGS[rm];
+            break;
+        case 4: // SXTB
+            operand2 = (int64_t)(int8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
+            break;
+        case 5: // SXTH
+            operand2 = (int64_t)(int16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
+            break;
+        case 6: // SXTW
+            operand2 = (int64_t)(int32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
+            break;
+        case 7: // SXTX
+            operand2 = CURRENT_STATE.REGS[rm];
+            break;
+        default:
+            operand2 = 0; // No debería ocurrir
+    }
+
+    operand2 = (shift == 0) ? operand2 : (operand2 << shift);
+    if (datasize == 32) operand2 &= 0xFFFFFFFF;
+
+    // Realizar la suma
+    uint64_t result = operand1 + operand2;
+    if (datasize == 32) result &= 0xFFFFFFFF;
+    
+    NEXT_STATE.REGS[rd] = result;
+
+    // Avanzar el PC
+    NEXT_STATE.PC += 4;
+
+    // Impresión de depuración
+    const char *extend_str[] = {"UXTB", "UXTH", "UXTW", "UXTX", "SXTB", "SXTH", "SXTW", "SXTX"};
+    printf("[ADD EXT] %s%d, %s%d, X%d, %s #%d (sf=%d) => 0x%016lx\n",
+           (rd == 31) ? "SP" : "X", rd,
+           (rn == 31) ? "SP" : "X", rn,
+           rm, extend_str[option], shift, sf, result);
 }
 
 

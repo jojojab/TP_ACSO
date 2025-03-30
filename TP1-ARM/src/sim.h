@@ -21,7 +21,8 @@
 #define IMM26_MASK 0x03FFFFFF
 #define COND_MASK 0x0000000F
 #define IMM19_MASK 0x00FFFFE0
-
+#define IMM3_MASK 0x1C00
+#define OPTION_MASK 0xE000
 #define IMMR_MASK 0x003F0000
 #define IMMS_MASK 0x0000FC00
 
@@ -35,7 +36,6 @@
 #define IMM9_SHIFT 12
 #define IMM16_SHIFT 5
 #define HW_SHIFT 21
-
 #define IMMR_SHIFT 16
 #define IMMS_SHIFT 10
 
@@ -65,6 +65,7 @@
 #define OP_MASK_BR 0xFFFFFC00
 #define OP_MASK_BCOND 0xFF000000
 #define OP_MASK_LSL 0xFF800000
+#define OP_MASK_ADD 0xFF100000
 #define OP_MASK_MOVZ 0xFF000000
 
 /* Patrones */
@@ -94,6 +95,7 @@ typedef enum
 
 /* Declaración adelantada de funciones de manejo de instrucciones */
 static void handle_halt(uint32_t instruction);
+static void handle_add_ext(uint32_t instruction);
 static void handle_adds_ext(uint32_t instruction);
 static void handle_adds_imm(uint32_t instruction);
 static void handle_subs_ext(uint32_t instruction);
@@ -115,6 +117,7 @@ static void handle_lsl_lsr(uint32_t instruction);
 static void handle_mul(uint32_t instruction);
 static void handle_cbz(uint32_t instruction);
 static void handle_cbnz(uint32_t instruction);
+static void handle_add_imm(uint32_t instruction);
 
 /* Declaración de funciones helper */
 static inline uint32_t extract_field(uint32_t instruction, uint32_t mask, uint8_t shift);
