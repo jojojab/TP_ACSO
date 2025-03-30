@@ -188,11 +188,40 @@ static void handle_stur(uint32_t instruction)
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
 
     uint64_t address = CURRENT_STATE.REGS[rn] + offset;
-    mem_write_32(address, CURRENT_STATE.REGS[rt]);
+    uint64_t aligned_addr = address & ~0x3;
+    int byte_offset = address % 4;
+    uint64_t value = CURRENT_STATE.REGS[rt];
+
+    uint32_t low_word = value & 0xFFFFFFFF;
+    uint32_t high_word = (value >> 32) & 0xFFFFFFFF;
+
+    if (byte_offset == 0)
+    {
+        // Alineado: escribir directamente
+        mem_write_32(aligned_addr, low_word);
+        mem_write_32(aligned_addr + 4, high_word);
+    }
+    else
+    {
+        // No alineado: leer-modificar-escribir
+        uint32_t orig_low = mem_read_32(aligned_addr);
+        uint32_t orig_high = mem_read_32(aligned_addr + 4);
+        uint32_t next_word = mem_read_32(aligned_addr + 8);
+
+        uint64_t shifted_value = value << (byte_offset * 8);
+        uint32_t new_low = (orig_low & ~(0xFFFFFFFF << (byte_offset * 8))) | (shifted_value & 0xFFFFFFFF);
+        uint32_t new_high = (shifted_value >> 32) | (next_word & (0xFFFFFFFF << (4 - byte_offset) * 8));
+
+        mem_write_32(aligned_addr, new_low);
+        mem_write_32(aligned_addr + 4, new_high);
+        if (byte_offset < 4)
+        {
+            mem_write_32(aligned_addr + 8, next_word & ~(0xFFFFFFFF >> ((4 - byte_offset) * 8)));
+        }
+    }
 
     NEXT_STATE.PC += 4;
-    printf("[STUR] X%d, [X%d, #0x%lx] => 0x%016lx\n",
-           rt, rn, offset, CURRENT_STATE.REGS[rt]);
+    printf("[STUR] X%d, [X%d, #0x%lx] => 0x%016lx\n", rt, rn, offset, value);
 }
 
 static void handle_sturb(uint32_t instruction)
@@ -201,10 +230,16 @@ static void handle_sturb(uint32_t instruction)
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     int64_t offset = (int64_t)(int16_t)(extract_field(instruction, IMM9_MASK, IMM9_SHIFT) << 7) >> 7;
 
-    uint64_t address =  CURRENT_STATE.REGS[rn];
-    address += offset;
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint64_t aligned_addr = address & ~0x3;
+    int byte_offset = address % 4;
     uint8_t data = CURRENT_STATE.REGS[rt] & 0xFF;
-    mem_write_32(address, data);
+
+    uint32_t word = mem_read_32(aligned_addr);
+    uint32_t mask = ~(0xFF << (byte_offset * 8));
+    uint32_t new_value = (word & mask) | ((uint32_t)data << (byte_offset * 8));
+
+    mem_write_32(aligned_addr, new_value);
 
     NEXT_STATE.PC += 4;
     printf("[STURB] X%d, [X%d, #0x%lx] => 0x%02x\n", rt, rn, offset, data);
@@ -217,30 +252,55 @@ static void handle_sturh(uint32_t instruction)
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
 
     uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    uint64_t aligned_addr = address & ~0x3;
+    int byte_offset = address % 4;
     uint16_t data = CURRENT_STATE.REGS[rt] & 0xFFFF;
-    mem_write_32(address, data);
+
+    uint32_t word = mem_read_32(aligned_addr);
+    uint32_t mask = ~(0xFFFF << (byte_offset * 8));
+    uint32_t new_value = (word & mask) | ((uint32_t)data << (byte_offset * 8));
+
+    mem_write_32(aligned_addr, new_value);
+
+    // Si cruza el límite de 32 bits
+    if (byte_offset > 2)
+    {
+        uint32_t next_word = mem_read_32(aligned_addr + 4);
+        uint32_t next_mask = ~(0xFFFF >> ((4 - byte_offset) * 8));
+        uint32_t next_value = (next_word & next_mask) | ((data >> (16 - byte_offset * 8)) & 0xFFFF);
+        mem_write_32(aligned_addr + 4, next_value);
+    }
 
     NEXT_STATE.PC += 4;
-    printf("[STURH] X%d, [X%d, #0x%lx] => 0x%04x\n",
-           rt, rn, offset, data);
+    printf("[STURH] X%d, [X%d, #0x%lx] => 0x%04x\n", rt, rn, offset, data);
 }
 
 static void handle_ldur(uint32_t instruction)
 {
-    uint8_t rt = extract_field(instruction, RD_MASK, 0);          // Registro destino (Xt)
-    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);   // Registro base (Xn o SP)
-    int64_t offset = (int64_t)(int16_t)(extract_field(instruction, IMM9_MASK, IMM9_SHIFT) << 7) >> 7; // Sign-extend IMM9
+    uint8_t rt = extract_field(instruction, RD_MASK, 0);
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
+    int64_t offset = (int64_t)(int16_t)(extract_field(instruction, IMM9_MASK, IMM9_SHIFT) << 7) >> 7;
 
-    // Calcular la dirección base: usar SP si Rn = 31, Xn de lo contrario
-    uint64_t address = CURRENT_STATE.REGS[rn];
-    address += offset;                                            // Sumar el offset con signo
+    uint64_t address = CURRENT_STATE.REGS[rn] + offset;
+    // Alinear a 4 bytes
+    uint64_t aligned_addr = address & ~0x3;
+    int byte_offset = address % 4;
 
-    uint64_t data = mem_read_32(address);                         // Cargar 64 bits
-    NEXT_STATE.REGS[rt] = data;                                   // Almacenar en Xt
+    // Leer dos palabras de 32 bits para formar 64 bits
+    uint32_t low_word = mem_read_32(aligned_addr);
+    uint32_t high_word = mem_read_32(aligned_addr + 4);
+    uint64_t data = ((uint64_t)high_word << 32) | low_word;
 
-    NEXT_STATE.PC += 4;                                           // Avanzar PC
-    printf("[LDUR] X%d, [X%d, #0x%lx] => 0x%016lx\n",            // Imprimir valor de 64 bits
-           rt, rn, offset, data);
+    // Ajustar si la dirección no está alineada
+    if (byte_offset)
+    {
+        uint32_t next_word = mem_read_32(aligned_addr + 8);
+        data = (data >> (byte_offset * 8)) | ((uint64_t)next_word << (64 - byte_offset * 8));
+    }
+
+    NEXT_STATE.REGS[rt] = data;
+    NEXT_STATE.PC += 4;
+    printf("[LDUR] X%d, [X%d, #0x%lx] => 0x%016lx\n", rt, rn, offset, data);
 }
 
 static void handle_ldurb(uint32_t instruction)
@@ -250,12 +310,15 @@ static void handle_ldurb(uint32_t instruction)
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
 
     uint64_t address = CURRENT_STATE.REGS[rn] + offset;
-    uint8_t data = mem_read_32(address) & 0xFF;
-    NEXT_STATE.REGS[rt] = (uint64_t)data;
+    uint64_t aligned_addr = address & ~0x3;
+    int byte_offset = address % 4;
 
+    uint32_t word = mem_read_32(aligned_addr);
+    uint8_t data = (word >> (byte_offset * 8)) & 0xFF;
+
+    NEXT_STATE.REGS[rt] = (uint64_t)data;
     NEXT_STATE.PC += 4;
-    printf("[LDURB] X%d, [X%d, #0x%lx] => 0x%02x\n",
-           rt, rn, offset, data);
+    printf("[LDURB] X%d, [X%d, #0x%lx] => 0x%02x\n", rt, rn, offset, data);
 }
 
 static void handle_ldurh(uint32_t instruction)
@@ -265,12 +328,22 @@ static void handle_ldurh(uint32_t instruction)
     uint64_t offset = extract_field(instruction, IMM9_MASK, IMM9_SHIFT);
 
     uint64_t address = CURRENT_STATE.REGS[rn] + offset;
-    uint16_t data = mem_read_32(address) & 0xFFFF;
-    NEXT_STATE.REGS[rt] = (uint64_t)data;
+    uint64_t aligned_addr = address & ~0x3;
+    int byte_offset = address % 4;
 
+    uint32_t word = mem_read_32(aligned_addr);
+    uint16_t data = (word >> (byte_offset * 8)) & 0xFFFF;
+
+    // Si el halfword cruza el límite de 32 bits
+    if (byte_offset > 2)
+    {
+        uint32_t next_word = mem_read_32(aligned_addr + 4);
+        data = (word >> (byte_offset * 8)) | ((next_word << (16 - byte_offset * 8)) & 0xFFFF);
+    }
+
+    NEXT_STATE.REGS[rt] = (uint64_t)data;
     NEXT_STATE.PC += 4;
-    printf("[LDURH] X%d, [X%d, #0x%lx] => 0x%04x\n",
-           rt, rn, offset, data);
+    printf("[LDURH] X%d, [X%d, #0x%lx] => 0x%04x\n", rt, rn, offset, data);
 }
 
 static void handle_movz(uint32_t instruction)
@@ -331,17 +404,19 @@ static void handle_lsl_lsr(uint32_t instruction)
     uint8_t immr = extract_field(instruction, IMMR_MASK, IMMR_SHIFT);
     uint8_t imms = extract_field(instruction, IMMS_MASK, IMMS_SHIFT);
 
-//    printf("IMMR: %d, IMMS: %d, RN: %d, RD:  %d\n", immr, imms, rn, rd);
+    //    printf("IMMR: %d, IMMS: %d, RN: %d, RD:  %d\n", immr, imms, rn, rd);
 
     uint64_t value = CURRENT_STATE.REGS[rn];
     uint64_t result;
     char *shift_type;
 
-    if (imms == 0x3F){
+    if (imms == 0x3F)
+    {
         shift_type = "LSR";
         result = apply_shift(value, SHIFT_LSR, immr);
     }
-    else{
+    else
+    {
         shift_type = "LSL";
         result = apply_shift(value, SHIFT_LSL, 64 - immr);
     }
@@ -349,10 +424,10 @@ static void handle_lsl_lsr(uint32_t instruction)
     NEXT_STATE.REGS[rd] = result;
     NEXT_STATE.PC += 4;
     printf("[%s] X%d, X%d, #%d, #%d => 0x%016lx\n", shift_type, rd, rn, immr, imms, result);
-
 }
 
-static void handle_mul(uint32_t instruction) {
+static void handle_mul(uint32_t instruction)
+{
     uint8_t rd = extract_field(instruction, RD_MASK, 0);
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);
@@ -365,35 +440,43 @@ static void handle_mul(uint32_t instruction) {
     printf("[MUL] X%d, X%d, X%d => 0x%016lx\n", rd, rn, rm, result);
 }
 
-static void handle_cbz(uint32_t instruction) {
+static void handle_cbz(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
 
     // Correct sign extension and word alignment
-    int64_t offset = ((int32_t)(imm19 << 13)) >> 11;  // Sign extend imm19 and shift correctly
-    offset *= 4;  // Ensure offset is word-aligned
+    int64_t offset = ((int32_t)(imm19 << 13)) >> 11; // Sign extend imm19 and shift correctly
+    offset *= 4;                                     // Ensure offset is word-aligned
 
-    if (CURRENT_STATE.REGS[rt] == 0) {
+    if (CURRENT_STATE.REGS[rt] == 0)
+    {
         NEXT_STATE.PC = CURRENT_STATE.PC + offset;
         printf("[CBZ] X%d == 0, Branch to 0x%lx\n", rt, NEXT_STATE.PC);
-    } else {
+    }
+    else
+    {
         NEXT_STATE.PC += 4;
         printf("[CBZ] X%d != 0, No branch\n", rt);
     }
 }
 
-static void handle_cbnz(uint32_t instruction) {
+static void handle_cbnz(uint32_t instruction)
+{
     uint8_t rt = extract_field(instruction, RD_MASK, 0);
     uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
 
     // Correct sign extension and word alignment
-    int64_t offset = ((int32_t)(imm19 << 13)) >> 11;  // Sign extend imm19 and shift correctly
-    offset *= 4;  // Ensure offset is word-aligned
+    int64_t offset = ((int32_t)(imm19 << 13)) >> 11; // Sign extend imm19 and shift correctly
+    offset *= 4;                                     // Ensure offset is word-aligned
 
-    if (CURRENT_STATE.REGS[rt] != 0) {
+    if (CURRENT_STATE.REGS[rt] != 0)
+    {
         NEXT_STATE.PC = CURRENT_STATE.PC + offset;
         printf("[CBNZ] X%d != 0, Branch to 0x%lx\n", rt, NEXT_STATE.PC);
-    } else {
+    }
+    else
+    {
         NEXT_STATE.PC += 4;
         printf("[CBNZ] X%d == 0, No branch\n", rt);
     }
@@ -402,18 +485,21 @@ static void handle_cbnz(uint32_t instruction) {
 static void handle_add_imm(uint32_t instruction)
 {
     // Extraer campos
-    uint8_t rd = extract_field(instruction, RD_MASK, 0);              // Registro destino (Xd)
-    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);       // Registro base (Xn)
+    uint8_t rd = extract_field(instruction, RD_MASK, 0);                  // Registro destino (Xd)
+    uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);           // Registro base (Xn)
     uint64_t imm12 = extract_field(instruction, IMM12_MASK, IMM12_SHIFT); // Inmediato de 12 bits
     uint8_t sh = extract_field(instruction, SHIFT1_MASK, SHIFT1_SHIFT);   // Bit de shift (0 o 1)
 
     int datasize = 64;
 
     uint64_t imm;
-    if (sh == 0) {
-        imm = imm12;          // Sin desplazamiento
-    } else {
-        imm = imm12 << 12;    // Desplazado 12 bits a la izquierda
+    if (sh == 0)
+    {
+        imm = imm12; // Sin desplazamiento
+    }
+    else
+    {
+        imm = imm12 << 12; // Desplazado 12 bits a la izquierda
     }
 
     // Obtener operando 1 (Xn o SP)
@@ -445,12 +531,13 @@ static void handle_add_ext(uint32_t instruction)
     uint8_t rd = extract_field(instruction, RD_MASK, 0);          // Registro destino (Xd)
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);   // Registro base (Xn)
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);   // Registro a extender (Xm)
-    uint8_t imm3 = extract_field(instruction, IMM3_MASK, 9); // Shift (0-4)
+    uint8_t imm3 = extract_field(instruction, IMM3_MASK, 9);      // Shift (0-4)
     uint8_t option = extract_field(instruction, OPTION_MASK, 13); // Tipo de extensión
     uint8_t sf = 1;
 
     // Validar imm3 (shift)
-    if (imm3 >= 5) {  // 101, 110, 111 son indefinidos
+    if (imm3 >= 5)
+    { // 101, 110, 111 son indefinidos
         printf("[ADD EXT] Undefined instruction: imm3 = %d\n", imm3);
         NEXT_STATE.PC += 4;
         return;
@@ -458,51 +545,55 @@ static void handle_add_ext(uint32_t instruction)
     uint8_t shift = imm3;
 
     // Determinar tamaño de datos
-    int datasize = 32 << sf;  // 32 si sf = 0, 64 si sf = 1
+    int datasize = 32 << sf; // 32 si sf = 0, 64 si sf = 1
 
     // Obtener operando 1 (Xn o SP)
     uint64_t operand1;
     operand1 = CURRENT_STATE.REGS[rn];
-    if (datasize == 32) operand1 &= 0xFFFFFFFF;
+    if (datasize == 32)
+        operand1 &= 0xFFFFFFFF;
 
     // Obtener operando 2 (extender Rm)
     uint64_t operand2;
-    switch (option) {
-        case 0: // UXTB
-            operand2 = (uint8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
-            break;
-        case 1: // UXTH
-            operand2 = (uint16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
-            break;
-        case 2: // UXTW
-            operand2 = (uint32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
-            break;
-        case 3: // UXTX
-            operand2 = CURRENT_STATE.REGS[rm];
-            break;
-        case 4: // SXTB
-            operand2 = (int64_t)(int8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
-            break;
-        case 5: // SXTH
-            operand2 = (int64_t)(int16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
-            break;
-        case 6: // SXTW
-            operand2 = (int64_t)(int32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
-            break;
-        case 7: // SXTX
-            operand2 = CURRENT_STATE.REGS[rm];
-            break;
-        default:
-            operand2 = 0; // No debería ocurrir
+    switch (option)
+    {
+    case 0: // UXTB
+        operand2 = (uint8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
+        break;
+    case 1: // UXTH
+        operand2 = (uint16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
+        break;
+    case 2: // UXTW
+        operand2 = (uint32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
+        break;
+    case 3: // UXTX
+        operand2 = CURRENT_STATE.REGS[rm];
+        break;
+    case 4: // SXTB
+        operand2 = (int64_t)(int8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
+        break;
+    case 5: // SXTH
+        operand2 = (int64_t)(int16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
+        break;
+    case 6: // SXTW
+        operand2 = (int64_t)(int32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
+        break;
+    case 7: // SXTX
+        operand2 = CURRENT_STATE.REGS[rm];
+        break;
+    default:
+        operand2 = 0; // No debería ocurrir
     }
 
     operand2 = (shift == 0) ? operand2 : (operand2 << shift);
-    if (datasize == 32) operand2 &= 0xFFFFFFFF;
+    if (datasize == 32)
+        operand2 &= 0xFFFFFFFF;
 
     // Realizar la suma
     uint64_t result = operand1 + operand2;
-    if (datasize == 32) result &= 0xFFFFFFFF;
-    
+    if (datasize == 32)
+        result &= 0xFFFFFFFF;
+
     NEXT_STATE.REGS[rd] = result;
 
     // Avanzar el PC
@@ -515,7 +606,6 @@ static void handle_add_ext(uint32_t instruction)
            (rn == 31) ? "SP" : "X", rn,
            rm, extend_str[option], shift, sf, result);
 }
-
 
 /*
     HELPER FUNCTIONS
