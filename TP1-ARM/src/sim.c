@@ -10,7 +10,7 @@ instruction_t instruction_table[] = {
     {OP_MASK, OP_ADDS_IMM << 21, "ADDS_IMM", handle_adds_imm},
     {OP_MASK, OP_SUBS_EXT << 21, "SUBS_EXT", handle_subs_ext},
     {OP_MASK, OP_SUBS_IMM << 21, "SUBS_IMM", handle_subs_imm},
-    {OP_MASK, 0x459 << 21, "ADD_EXT", handle_add_ext},
+    {OP_MASK, 0x458 << 21, "ADD_EXT", handle_add_ext},
     {OP_MASK_ADD, 0x122 << 23, "ADD_IMM", handle_add_imm},
     {OP_MASK, OP_ANDS_SHIFT << 21, "ANDS_SHIFT", handle_ands_shift},
     {OP_MASK, OP_EOR_SHIFT << 21, "EOR_SHIFT", handle_eor_shift},
@@ -46,6 +46,7 @@ void process_instruction()
     }
 
     printf("Unknown instruction: 0x%08x\n", instruction);
+    printf("Opcode: 0x%08x\n", instruction & OP_MASK);
     NEXT_STATE.PC += 4;
 }
 
@@ -531,61 +532,35 @@ static void handle_add_ext(uint32_t instruction)
     uint8_t rd = extract_field(instruction, RD_MASK, 0);          // Registro destino (Xd)
     uint8_t rn = extract_field(instruction, RN_MASK, RN_SHIFT);   // Registro base (Xn)
     uint8_t rm = extract_field(instruction, RM_MASK, RM_SHIFT);   // Registro a extender (Xm)
-    uint8_t imm3 = extract_field(instruction, IMM3_MASK, 9);      // Shift (0-4)
+    uint8_t imm3 = extract_field(instruction, IMM3_MASK, 10);      // Shift (0-4)
     uint8_t option = extract_field(instruction, OPTION_MASK, 13); // Tipo de extensión
-    uint8_t sf = 1;
+    uint8_t sf = 1;   // Extraer el valor de SF
 
     // Validar imm3 (shift)
     if (imm3 >= 5)
-    { // 101, 110, 111 son indefinidos
+    {
         printf("[ADD EXT] Undefined instruction: imm3 = %d\n", imm3);
         NEXT_STATE.PC += 4;
         return;
     }
     uint8_t shift = imm3;
 
+    printf("Shift: %d\n", shift);
+
     // Determinar tamaño de datos
     int datasize = 32 << sf; // 32 si sf = 0, 64 si sf = 1
 
     // Obtener operando 1 (Xn o SP)
-    uint64_t operand1;
-    operand1 = CURRENT_STATE.REGS[rn];
+    uint64_t operand1 = CURRENT_STATE.REGS[rn];
     if (datasize == 32)
         operand1 &= 0xFFFFFFFF;
 
     // Obtener operando 2 (extender Rm)
-    uint64_t operand2;
-    switch (option)
-    {
-    case 0: // UXTB
-        operand2 = (uint8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
-        break;
-    case 1: // UXTH
-        operand2 = (uint16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
-        break;
-    case 2: // UXTW
-        operand2 = (uint32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
-        break;
-    case 3: // UXTX
-        operand2 = CURRENT_STATE.REGS[rm];
-        break;
-    case 4: // SXTB
-        operand2 = (int64_t)(int8_t)(CURRENT_STATE.REGS[rm] & 0xFF);
-        break;
-    case 5: // SXTH
-        operand2 = (int64_t)(int16_t)(CURRENT_STATE.REGS[rm] & 0xFFFF);
-        break;
-    case 6: // SXTW
-        operand2 = (int64_t)(int32_t)(CURRENT_STATE.REGS[rm] & 0xFFFFFFFF);
-        break;
-    case 7: // SXTX
-        operand2 = CURRENT_STATE.REGS[rm];
-        break;
-    default:
-        operand2 = 0; // No debería ocurrir
-    }
+    uint64_t operand2 = CURRENT_STATE.REGS[rm];
+    printf("Option: %d\n", option);
 
     operand2 = (shift == 0) ? operand2 : (operand2 << shift);
+    printf("operand1: %lx, operand2: %lx\n", operand1, operand2); // Debugging
     if (datasize == 32)
         operand2 &= 0xFFFFFFFF;
 
@@ -606,6 +581,7 @@ static void handle_add_ext(uint32_t instruction)
            (rn == 31) ? "SP" : "X", rn,
            rm, extend_str[option], shift, sf, result);
 }
+
 
 /*
     HELPER FUNCTIONS

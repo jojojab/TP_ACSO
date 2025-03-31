@@ -72,7 +72,7 @@
 #define OP_BRANCH 0x5
 #define OP_BR 0x3587C0
 #define OP_BCOND 0x54
-#define OP_CBZ 0xB5
+#define OP_CBZ 0x34
 #define OP_CBNZ 0x35
 
 #define INSTRUCTION_TABLE_SIZE (sizeof(instruction_table) / sizeof(instruction_table[0]))
