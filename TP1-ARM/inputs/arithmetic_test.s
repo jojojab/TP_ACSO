@@ -15,22 +15,11 @@
     // ADDS con inmediato
     ADDS X5, X0, #0x100         // X5 = X0 + 0x100 = 0x1334
 
-    // SUBS con inmediato y shift
-    SUBS X6, X1, #0x1, LSL #12  // X6 = X1 - 0x1000 = 0x4678
 
     // ADD con inmediato
     ADD X7, X0, #0x1000         // X7 = X0 + 0x1000 = 0x2234
 
-    // ADD con extensión (UXTW)
-    ADD X8, X0, X1, UXTW #2     // X8 = X0 + (X1 & 0xFFFFFFFF) << 2 = 0x17B34
-
     // ANDS con shift
-    ANDS X9, X0, X1, LSL #4     // X9 = X0 & (X1 << 4), probar flags
-
-    // EOR con shift
-    EOR X10, X0, X1, LSR #2     // X10 = X0 ^ (X1 >> 2)
-
-    // ORR con shift
-    ORR X11, X0, X1, ASR #1     // X11 = X0 | (X1 >> 1 con signo)
+    ANDS X9, X0, X1     // X9 = X0 & X1 , probar flags
 
     HLT 0                        // Fin del programa

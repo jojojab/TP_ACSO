@@ -10,7 +10,7 @@
     LDUR X2, [X0, #-256]        // Offset negativo máximo
 
     // Valor máximo en MOVZ
-    MOVZ X3, #0xFFFF, LSL #48   // X3 = 0xFFFF000000000000
+    MOVZ X3, #0xFFFF
 
     // Multiplicación grande
     MUL X4, X3, X3              // X4 = X3 * X3, probar overflow

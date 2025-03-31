@@ -9,7 +9,7 @@ instruction_t instruction_table[] = {
     {OP_MASK, OP_ADDS_EXT << 21, "ADDS_EXT", handle_adds_ext},
     {OP_MASK, OP_ADDS_IMM << 21, "ADDS_IMM", handle_adds_imm},
     {OP_MASK, OP_SUBS_EXT << 21, "SUBS_EXT", handle_subs_ext},
-    {OP_MASK, OP_SUBS_IMM << 21, "SUBS_IMM", handle_subs_imm},
+    {0xFF000000, OP_SUBS_IMM << 21, "SUBS_IMM", handle_subs_imm},
     {OP_MASK, 0x458 << 21, "ADD_EXT", handle_add_ext},
     {OP_MASK_ADD, 0x122 << 23, "ADD_IMM", handle_add_imm},
     {OP_MASK, OP_ANDS_SHIFT << 21, "ANDS_SHIFT", handle_ands_shift},
@@ -46,9 +46,6 @@ void process_instruction()
     }
 
     printf("Unknown instruction: 0x%08x\n", instruction);
-    printf("Opcode: 0x%08x\n", instruction & OP_MASK);
-    uint8_t aaa = (instruction & OP_MASK_BCOND);
-    printf("BCOND: 0x%08x\n", aaa);
     NEXT_STATE.PC += 4;
 }
 
