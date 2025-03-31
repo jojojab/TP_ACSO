@@ -47,6 +47,8 @@ void process_instruction()
 
     printf("Unknown instruction: 0x%08x\n", instruction);
     printf("Opcode: 0x%08x\n", instruction & OP_MASK);
+    uint8_t aaa = (instruction & OP_MASK_BCOND);
+    printf("BCOND: 0x%08x\n", aaa);
     NEXT_STATE.PC += 4;
 }
 
@@ -356,7 +358,6 @@ static void handle_movz(uint32_t instruction)
     if (shift == 0)
     {
         NEXT_STATE.REGS[rd] = imm;
-        set_flags_z_n(&NEXT_STATE, imm);
         printf("[MOVZ] X%d, #0x%lx => 0x%016lx\n", rd, imm, imm);
     }
 
@@ -447,7 +448,7 @@ static void handle_cbz(uint32_t instruction)
     uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
 
     // Correct sign extension and word alignment
-    int64_t offset = ((int32_t)(imm19 << 13)) >> 11; // Sign extend imm19 and shift correctly
+    int64_t offset = ((int32_t)(imm19 << 13)) >> 13; // Sign extend imm19 and shift correctly
     offset *= 4;                                     // Ensure offset is word-aligned
 
     if (CURRENT_STATE.REGS[rt] == 0)
@@ -468,7 +469,7 @@ static void handle_cbnz(uint32_t instruction)
     uint32_t imm19 = extract_field(instruction, IMM19_MASK, 5);
 
     // Correct sign extension and word alignment
-    int64_t offset = ((int32_t)(imm19 << 13)) >> 11; // Sign extend imm19 and shift correctly
+    int64_t offset = ((int32_t)(imm19 << 13)) >> 13; // Sign extend imm19 and shift correctly
     offset *= 4;                                     // Ensure offset is word-aligned
 
     if (CURRENT_STATE.REGS[rt] != 0)
