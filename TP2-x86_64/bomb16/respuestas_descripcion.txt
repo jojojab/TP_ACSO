@@ -1,0 +1,29 @@
+Nombre: Joel Jablonski
+Mail: jjablonski@udesa.edu.ar
+
+Fase 1:
+En esta fase se busca que la entrada ingresada por el usuario coincida con el contenido que se encuentra en la direccion de memoria 0x4c9a58.
+Para conseguir esto, luego de que se cargara en memoria la cadena de caracteres, utilice el comando x/s para ver el contenido de la direccion.
+
+Fase 2:
+En esta fase se espera que el usuario ingrese dos números en el input, los cuales mediante la funcion __strtol se convierten a enteros. Estos valores se guardan en los registros r12 y r13.
+Luego se realizan dos operaciones entre ambos numeros, una multiplicacion la cual debe ser distinta a 0 y una suma que tiene que dar como resultado 0x7ab0.
+Si ambas condiciones se cumplen, se procedia a llamar a la funcion auxiliar 'misterio', esta funcion recibe como argumento los dos numeros ingresados por el usuario y realiza un xor entre ambos.
+Para desactivar esta fase, el resultado del xor debe ser negativo por lo que se debe ingresar un numero negativo.
+
+Fase 3:
+Esta fase espera una entrada un string y un numero, la cual mas adelante resulta ser una entrada tipo string - numero - string para acceder a la 'fase secreta'
+Una vez dentro de esta fase, se utiliza la funcion 'cuenta' la cual realiza una serie de comparaciones recursivas sobra la entrada del usuario.
+Esta funcion tiene un comportamiento de busqueda binaria parala condicion de detencion. El rango donde la fase puede ser desactivada sin que explote va de 6 iteraciones sobre cuenta hasta 11.
+Para encontrar las palabras sobre las cuales iteraba la funcion, utilice el comando x/s $rsi. Esto me permitio saber la mitad de la entrada esperada por la fase, la parte del numero simplemente es la iteracion en la cual aparece la palabra seleccionada. Esto se debe al contador que incrementa de a 1 en cada iteracion.
+
+Fase 4:
+Esta fase espera una entrada de texto cuya longitud debe ser exactamente 6 caracteres. Esto se debe a la comparacion entre eax y 0x6.
+Una vez dentro de la fase, se itera sobre cada caracter de la cadena ingresada y se toman los 4 bits menos significativos de cada uno. Esta funcion suma todos estos valores y para desactivarla hace una comparacion entre la suma y 0x1b (59 en decimal).
+Para conseguir esto, ingrese al azar distintos caracteres y observe el valor de la suma para observar cuanto aportaba cada simbolo utilizado. Al tener distintos caracteres con su contribucion busque una combinacion de 6 caracteres que satisfaciera la condicion de la suma.
+
+Fase Secreta:
+Una vez finalizada las 4 fases anteriores, observé que existia una fase extra, la 'fase secreta', pero esta fase se accedia de otra forma, a diferencia de las otras fases que se llamaban a medida que se completaba la anterior, para acceder a esta se debia ingresar una cadena especifica en la fase 3.
+Al lograr acceder a esta fase, primero mire que esperaba la fase, debido al uso de __strtol comprendi que esperaba un numero. La primera condicion de este numero es que debia estar en un rango entre 1 y 1001 ya que hacia una comparacion entre el numero y 0x3e8. Si este numero era negativo o 0, se continuaba con la proxima condicion, caso contrario la bomba explotaba.
+Por ultimo, la fase llama a la funcion 'fun7' la cual realiza una busqueda binaria dentro de un arbol. Luego de entender esto tenia que ver que valor era el esperado, para encontrar utilize el comando 'x/3xw 0x4f91f0' para obtener el valor del nodo raiz.
+Una vez encontrado restaba correr toda la bomba utilizando las entradas esperadas y desactivar la bomba.
