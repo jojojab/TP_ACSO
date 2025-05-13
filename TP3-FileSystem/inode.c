@@ -8,14 +8,13 @@
  * TODO
  */
 int inode_iget(struct unixfilesystem *fs, int inumber, struct inode *inp) {
-    // 1. Validar inumber
     if (inumber < 1) {
         return -1;
     }
 
     int inodes_per_sector = DISKIMG_SECTOR_SIZE / sizeof(struct inode);
     int sector_offset = (inumber - 1) / inodes_per_sector;
-    int in_sector_index = (inumber - 1) % inodes_per_sector;
+    int sector_index = (inumber - 1) % inodes_per_sector;
 
     int sector_num = INODE_START_SECTOR + sector_offset;
     struct inode inodes[DISKIMG_SECTOR_SIZE / sizeof(struct inode)];
@@ -24,8 +23,7 @@ int inode_iget(struct unixfilesystem *fs, int inumber, struct inode *inp) {
     if (bytes_read != DISKIMG_SECTOR_SIZE) {
         return -1;
     }
-    *inp = inodes[in_sector_index];
-
+    *inp = inodes[sector_index];
 
     return 0;
 }
@@ -34,7 +32,7 @@ int inode_iget(struct unixfilesystem *fs, int inumber, struct inode *inp) {
  * TODO
  */
 int inode_indexlookup(struct unixfilesystem *fs, struct inode *inp, int blockNum) {
-    // Si no es un archivo grande, usamos direccionamiento directo
+
     if ((inp->i_mode & ILARG) == 0) {
         if (blockNum < 8) {
             return inp->i_addr[blockNum];
@@ -43,7 +41,6 @@ int inode_indexlookup(struct unixfilesystem *fs, struct inode *inp, int blockNum
         }
     }
 
-    // Si es un archivo grande: bloques indirectos o doblemente indirectos
     if (blockNum < 7 * 256) {
         // Indirecto simple
         int indir_block = inp->i_addr[blockNum / 256];
