@@ -1,72 +1,105 @@
-#include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <limits.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/wait.h>
 
+#define ERROR(...) do { fprintf(stderr, __VA_ARGS__); exit(1); } while (0)
 
-int main(int argc, char **argv)
-{
-	int start, status, pid, n;
-	int buffer[1];
+int safe_atoi(const char *s, int *out) {
+    char *end;
+    errno = 0;
+    long val = strtol(s, &end, 10);
+    if (*end != '\0' || val < INT_MIN || val > INT_MAX) return 0;
+    *out = (int)val;
+    return 1;
+}
 
-	if (argc != 4){ printf("Uso: anillo <n> <c> <s> \n"); exit(0);}
+int safe_increment(int x) {
+    if (x == INT_MAX) {
+        ERROR("Error: overflow de entero al incrementar\n");
+    }
+    return x + 1;
+}
 
-    /* Parsing of arguments */
-    n = atoi(argv[1]);
-    buffer[0] = atoi(argv[2]);
-    start = atoi(argv[3]);
-    /* TO COMPLETE */
+int main(int argc, char *argv[]) {
+    if (argc != 4) {
+        fprintf(stderr, "Uso: %s <n> <c> <s>\n", argv[0]);
+        return 1;
+    }
 
-    printf("Se crearán %i procesos, se enviará el caracter %i desde proceso %i \n", n, buffer[0], start);
+    int n, val, start;
+    if (!safe_atoi(argv[1], &n) || n <= 0) ERROR("Error: argumento n inv\xE1lido\n");
+    if (!safe_atoi(argv[2], &val)) ERROR("Error: argumento c inv\xE1lido\n");
+    if (!safe_atoi(argv[3], &start) || start < 0 || start >= n) ERROR("Error: argumento s inv\xE1lido\n");
 
-    int pipes[n+1][2];
-    for (int i = 0; i < n + 1; i++) {
-        if (pipe(pipes[i]) == -1) {
+    int ring[n][2];
+    for (int i = 0; i < n; i++) {
+        if (pipe(ring[i]) == -1) {
             perror("pipe");
             exit(1);
         }
     }
 
     for (int i = 0; i < n; i++) {
-        pid = fork();
+        pid_t pid = fork();
         if (pid < 0) {
             perror("fork");
             exit(1);
-        } else if (pid == 0) {
-            int read_fd = pipes[i][0];
-            int write_fd = pipes[i+1][1];
+        }
 
-            for (int j = 0; j < n+1; j++) {
-                if (pipes[j][0] != read_fd) close(pipes[j][0]);
-                if (pipes[j][1] != write_fd) close(pipes[j][1]);
+        if (pid == 0) {
+            int read_fd = ring[i][0];
+            int write_fd = ring[(i + 1) % n][1];
+
+            for (int j = 0; j < n; j++) {
+                if (ring[j][0] != read_fd) close(ring[j][0]);
+                if (ring[j][1] != write_fd) close(ring[j][1]);
             }
 
-            int val;
-            read(read_fd, &val, sizeof(int));
-            val++;
-            write(write_fd, &val, sizeof(int));
+            if (i == start) {
+                if (write(write_fd, &val, sizeof(int)) != sizeof(int)) {
+                    perror("write inicial");
+                    exit(1);
+                }
+
+                int final;
+                if (read(read_fd, &final, sizeof(int)) != sizeof(int)) {
+                    perror("read final");
+                    exit(1);
+                }
+                final = safe_increment(final);
+                printf("Valor final recibido por el proceso %d: %d\n", start, final);
+            } else {
+                int x;
+                if (read(read_fd, &x, sizeof(int)) != sizeof(int)) {
+                    perror("read");
+                    exit(1);
+                }
+                x = safe_increment(x);
+                if (write(write_fd, &x, sizeof(int)) != sizeof(int)) {
+                    perror("write");
+                    exit(1);
+                }
+            }
+
             close(read_fd);
             close(write_fd);
             exit(0);
         }
     }
 
-    // PADRE
-
-    for (int i = 0; i < n + 1; i++) {
-        if (i != start) close(pipes[i][1]);         // solo escribe al pipe[start]
-        if (i != n) close(pipes[i][0]);             // solo lee del pipe[n]
+    for (int i = 0; i < n; i++) {
+        close(ring[i][0]);
+        close(ring[i][1]);
     }
 
-    write(pipes[start][1], buffer, sizeof(int));
-    close(pipes[start][1]); // ya no escribe más
+    int status, failed = 0;
+    while (wait(&status) > 0) {
+        if (WIFEXITED(status) && WEXITSTATUS(status) != 0) failed = 1;
+    }
 
-    read(pipes[n][0], buffer, sizeof(int));
-    close(pipes[n][0]);
-
-    printf("Resultado final recibido por el padre: %d\n", buffer[0]);
-    while (waitpid(-1, &status, 0) > 0);
-
-    return 0;
+    return failed ? 1 : 0;
 }
