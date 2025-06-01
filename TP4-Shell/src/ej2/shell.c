@@ -7,7 +7,6 @@
 #define MAX_COMMANDS 200
 #define MAX_ARGS 100
 
-// Quita espacios iniciales y finales
 char *trim_whitespace(char *str) {
     while (*str == ' ') str++;
     if (*str == '\0') return str;
@@ -17,7 +16,6 @@ char *trim_whitespace(char *str) {
     return str;
 }
 
-// Parsea una línea respetando comillas dobles
 void parse_arguments(const char *input, char **args, int *argc_out) {
     int argc = 0;
     const char *p = input;
@@ -51,8 +49,6 @@ void parse_arguments(const char *input, char **args, int *argc_out) {
     *argc_out = argc;
 }
 
-// Parsea la línea en comandos separados por '|', sin strtok
-// Retorna la cantidad de comandos encontrados
 int split_commands(char *line, char **commands) {
     int count = 0;
     char *start = line;
@@ -66,7 +62,6 @@ int split_commands(char *line, char **commands) {
         }
         p++;
     }
-    // último comando
     if (*start != '\0') {
         commands[count++] = trim_whitespace(start);
     }
@@ -77,7 +72,6 @@ void ejecutar_linea(char *command_line) {
     char *commands[MAX_COMMANDS];
     int command_count = 0;
 
-    // Revisar || como error de sintaxis
     for (int i = 0; command_line[i]; i++) {
         if (command_line[i] == '|' && command_line[i+1] == '|') {
             fprintf(stderr, "-bash: syntax error near unexpected token `||'\n");
@@ -92,7 +86,6 @@ void ejecutar_linea(char *command_line) {
     command_count = split_commands(command_line, commands);
     if (command_count == 0) return;
 
-    // Comando interno exit
     if (command_count == 1 && strcmp(commands[0], "exit") == 0) {
         exit(0);
     }
@@ -114,16 +107,13 @@ void ejecutar_linea(char *command_line) {
         }
 
         if (pid == 0) {
-            // hijo
-
-            // stdin para todos excepto primer comando
             if (i != 0) {
                 if (dup2(pipefds[(i-1)*2], STDIN_FILENO) < 0) {
                     perror("dup2 stdin");
                     exit(EXIT_FAILURE);
                 }
             }
-            // stdout para todos excepto último comando
+
             if (i != command_count - 1) {
                 if (dup2(pipefds[i*2 + 1], STDOUT_FILENO) < 0) {
                     perror("dup2 stdout");
@@ -131,7 +121,6 @@ void ejecutar_linea(char *command_line) {
                 }
             }
 
-            // cerrar todos los fds de pipes en hijo
             for (int j = 0; j < 2*(command_count-1); j++) {
                 close(pipefds[j]);
             }
@@ -141,7 +130,6 @@ void ejecutar_linea(char *command_line) {
             parse_arguments(commands[i], args, &argc);
             args[argc] = NULL;
 
-            // exit en pipeline
             if (strcmp(args[0], "exit") == 0) {
                 for (int j = 0; j < argc; j++) free(args[j]);
                 exit(0);
@@ -155,12 +143,10 @@ void ejecutar_linea(char *command_line) {
         }
     }
 
-    // padre cierra todos pipes
     for (int i = 0; i < 2*(command_count-1); i++) {
         close(pipefds[i]);
     }
 
-    // padre espera hijos
     for (int i = 0; i < command_count; i++) {
         wait(NULL);
     }
