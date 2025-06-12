@@ -15,70 +15,80 @@
 #include <thread>      // for thread
 #include <vector>      // for vector
 #include "Semaphore.h" // for Semaphore
+#include <queue>
+#include <condition_variable>
+#include <mutex>
 
 using namespace std;
 
 
 /**
  * @brief Represents a worker in the thread pool.
- * 
- * The `worker_t` struct contains information about a worker 
- * thread in the thread pool. Should be includes the thread object, 
- * availability status, the task to be executed, and a semaphore 
- * (or condition variable) to signal when work is ready for the 
+ *
+ * The worker_t struct contains information about a worker
+ * thread in the thread pool. Should be includes the thread object,
+ * availability status, the task to be executed, and a semaphore
+ * (or condition variable) to signal when work is ready for the
  * worker to process.
  */
 typedef struct worker {
     thread ts;
     function<void(void)> thunk;
-    /**
-     * Complete the definition of the worker_t struct here...
-     **/
+    Semaphore ready{0};
+    bool available = true;
+    bool waiting = false;
 } worker_t;
 
 class ThreadPool {
-  public:
+public:
 
-  /**
-  * Constructs a ThreadPool configured to spawn up to the specified
-  * number of threads.
-  */
+    /**
+    * Constructs a ThreadPool configured to spawn up to the specified
+    * number of threads.
+    */
     ThreadPool(size_t numThreads);
 
-  /**
-  * Schedules the provided thunk (which is something that can
-  * be invoked as a zero-argument function without a return value)
-  * to be executed by one of the ThreadPool's threads as soon as
-  * all previously scheduled thunks have been handled.
-  */
+    /**
+    * Schedules the provided thunk (which is something that can
+    * be invoked as a zero-argument function without a return value)
+    * to be executed by one of the ThreadPool's threads as soon as
+    * all previously scheduled thunks have been handled.
+    */
     void schedule(const function<void(void)>& thunk);
 
-  /**
-  * Blocks and waits until all previously scheduled thunks
-  * have been executed in full.
-  */
+    /**
+    * Blocks and waits until all previously scheduled thunks
+    * have been executed in full.
+    */
     void wait();
 
-  /**
-  * Waits for all previously scheduled thunks to execute, and then
-  * properly brings down the ThreadPool and any resources tapped
-  * over the course of its lifetime.
-  */
+    /**
+    * Waits for all previously scheduled thunks to execute, and then
+    * properly brings down the ThreadPool and any resources tapped
+    * over the course of its lifetime.
+    */
     ~ThreadPool();
-    
-  private:
+
+private:
 
     void worker(int id);
     void dispatcher();
     thread dt;                              // dispatcher thread handle
     vector<worker_t> wts;                   // worker thread handles. you may want to change/remove this
     bool done;                              // flag to indicate the pool is being destroyed
-    mutex queueLock;                        // mutex to protect the queue of tasks
 
-    /* It is incomplete, there should be more private variables to manage the structures... 
+    /* It is incomplete, there should be more private variables to manage the structures...
     * *
     */
-  
+
+    mutex globalLock;
+    queue<function<void(void)>> tasks;
+    condition_variable_any taskAvailable;
+    size_t remainingTasks = 0;
+    condition_variable allDone;
+
+    exception_ptr firstException = nullptr;
+
     /* ThreadPools are the type of thing that shouldn't be cloneable, since it's
     * not clear what it means to clone a ThreadPool (should copies of all outstanding
     * functions to be executed be copied?).
