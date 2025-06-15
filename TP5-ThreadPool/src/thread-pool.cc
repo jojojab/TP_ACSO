@@ -16,8 +16,10 @@ ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false), remain
     dt = thread([this]() { dispatcher(); });
 }
 
-
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+    if (done) throw runtime_error("Cannot schedule on destroyed ThreadPool.");
+    if (!thunk) throw runtime_error("Cannot schedule a null task.");
+
     {
         lock_guard<mutex> lg(globalLock);
         tasks.push(thunk);
@@ -29,29 +31,20 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 void ThreadPool::wait() {
     unique_lock<mutex> lk(globalLock);
 
-    // 🔥 Marcar que este worker está dentro de wait()
     if (currentWorkerId != -1) {
         wts[currentWorkerId].waiting = true;
     }
 
     allDone.wait(lk, [this]() {
-        size_t activeTasks = remainingTasks;
-
-        if (activeTasks == 0) return true;
-
-        // 🔥 Contar los workers que están esperando
-        size_t waitingWorkers = 0;
-        for (const auto& w : wts) {
-            if (w.waiting) waitingWorkers++;
-        }
-
-        // 🔥 Si las tareas activas son sólo las de los que están esperando
-        return activeTasks == waitingWorkers;
+        return remainingTasks == 0;
     });
 
-    // 🔥 Desmarcar que este worker está en wait()
     if (currentWorkerId != -1) {
         wts[currentWorkerId].waiting = false;
+    }
+
+    if (firstException) {
+        rethrow_exception(firstException);
     }
 }
 
@@ -99,7 +92,14 @@ void ThreadPool::worker(int id) {
             if (done) return;
         }
 
-        wts[id].thunk();
+        try {
+            wts[id].thunk();
+        } catch (...) {
+            lock_guard<mutex> lg(globalLock);
+            if (!firstException) {
+                firstException = current_exception();
+            }
+        }
 
         {
             lock_guard<mutex> lg(globalLock);
@@ -115,7 +115,12 @@ void ThreadPool::worker(int id) {
 }
 
 ThreadPool::~ThreadPool() {
-    wait();
+    try {
+        wait();
+    } catch (...) {
+        // Destructor debe ignorar excepciones propagadas
+    }
+
     {
         lock_guard<mutex> lg(globalLock);
         done = true;
