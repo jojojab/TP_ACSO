@@ -5,6 +5,8 @@
  */
 
 #include "thread-pool.h"
+#include <stdexcept>
+
 using namespace std;
 
 thread_local int currentWorkerId = -1;
