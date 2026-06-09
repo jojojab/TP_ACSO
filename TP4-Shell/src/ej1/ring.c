@@ -1,141 +1,105 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/wait.h>
-#include <string.h>
+#include <limits.h>
 #include <errno.h>
+#include <string.h>
+#include <sys/wait.h>
 
-#define MAX_COMMANDS 200
+#define ERROR(...) do { fprintf(stderr, __VA_ARGS__); exit(1); } while (0)
 
-// Quita espacios iniciales y finales
-char *trim_whitespace(char *str) {
-    while (*str == ' ') str++;
-    if (*str == '\0') return str;
-    char *end = str + strlen(str) - 1;
-    while (end > str && *end == ' ') end--;
-    *(end + 1) = '\0';
-    return str;
+int safe_atoi(const char *s, int *out) {
+    char *end;
+    errno = 0;
+    long val = strtol(s, &end, 10);
+    if (*end != '\0' || val < INT_MIN || val > INT_MAX) return 0;
+    *out = (int)val;
+    return 1;
 }
 
-// Parsea una línea respetando comillas dobles y simples
-void parse_arguments(const char *input, char **args, int *argc_out) {
-    int argc = 0;
-    const char *p = input;
+int safe_increment(int x) {
+    if (x == INT_MAX) {
+        ERROR("Error: overflow de entero al incrementar\n");
+    }
+    return x + 1;
+}
 
-    while (*p) {
-        while (*p == ' ') p++;
-        if (*p == '\0') break;
+int main(int argc, char *argv[]) {
+    if (argc != 4) {
+        fprintf(stderr, "Uso: %s <n> <c> <s>\n", argv[0]);
+        return 1;
+    }
 
-        if (*p == '"' || *p == '\'') {
-            char quote = *p++;
-            const char *start = p;
-            while (*p && *p != quote) p++;
-            int len = p - start;
-            args[argc] = malloc(len + 1);
-            strncpy(args[argc], start, len);
-            args[argc][len] = '\0';
-            argc++;
-            if (*p == quote) p++;
-        } else {
-            const char *start = p;
-            while (*p && *p != ' ') p++;
-            int len = p - start;
-            if (len > 0) {
-                args[argc] = malloc(len + 1);
-                strncpy(args[argc], start, len);
-                args[argc][len] = '\0';
-                argc++;
-            }
+    int n, val, start;
+    if (!safe_atoi(argv[1], &n) || n <= 0) ERROR("Error: argumento n inv\xE1lido\n");
+    if (!safe_atoi(argv[2], &val)) ERROR("Error: argumento c inv\xE1lido\n");
+    if (!safe_atoi(argv[3], &start) || start < 0 || start >= n) ERROR("Error: argumento s inv\xE1lido\n");
+
+    int ring[n][2];
+    for (int i = 0; i < n; i++) {
+        if (pipe(ring[i]) == -1) {
+            perror("pipe");
+            exit(1);
         }
     }
 
-    args[argc] = NULL;
-    *argc_out = argc;
-}
-
-int main() {
-    char command[1024];
-    char *commands[MAX_COMMANDS];
-    int command_count = 0;
-
-    while (1) {
-        if (isatty(STDIN_FILENO)) {
-            printf("Shell> ");
-            fflush(stdout);
+    for (int i = 0; i < n; i++) {
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            exit(1);
         }
 
-        if (fgets(command, sizeof(command), stdin) == NULL) break;
+        if (pid == 0) {
+            int read_fd = ring[i][0];
+            int write_fd = ring[(i + 1) % n][1];
 
-        command[strcspn(command, "\n")] = '\0';
-
-        command_count = 0;
-        char *saveptr;
-        char *token = strtok_r(command, "|", &saveptr);
-        while (token != NULL) {
-            token = trim_whitespace(token);
-            if (*token == '\0') {
-                fprintf(stderr, "Error: comando vacío entre pipes\n");
-                command_count = 0;
-                break;
-            }
-            commands[command_count++] = token;
-            token = strtok_r(NULL, "|", &saveptr);
-        }
-
-        if (command_count == 0) continue;
-
-        int pipefds[2 * (command_count - 1)];
-        for (int i = 0; i < command_count - 1; i++) {
-            if (pipe(pipefds + i * 2) < 0) {
-                perror("pipe");
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        for (int i = 0; i < command_count; i++) {
-            pid_t pid = fork();
-            if (pid == -1) {
-                perror("fork");
-                exit(EXIT_FAILURE);
+            for (int j = 0; j < n; j++) {
+                if (ring[j][0] != read_fd) close(ring[j][0]);
+                if (ring[j][1] != write_fd) close(ring[j][1]);
             }
 
-            if (pid == 0) {
-                if (i != 0) {
-                    if (dup2(pipefds[(i - 1) * 2], 0) < 0) {
-                        perror("dup2 read");
-                        exit(EXIT_FAILURE);
-                    }
-                }
-                if (i != command_count - 1) {
-                    if (dup2(pipefds[i * 2 + 1], 1) < 0) {
-                        perror("dup2 write");
-                        exit(EXIT_FAILURE);
-                    }
-                }
-
-                for (int j = 0; j < 2 * (command_count - 1); j++) close(pipefds[j]);
-
-                char *args[100];
-                int argc = 0;
-                char *trimmed = trim_whitespace(commands[i]);
-                parse_arguments(trimmed, args, &argc);
-                args[argc] = NULL;
-
-                if (argc == 0) {
-                    fprintf(stderr, "Error: comando vacío\n");
+            if (i == start) {
+                if (write(write_fd, &val, sizeof(int)) != sizeof(int)) {
+                    perror("write inicial");
                     exit(1);
                 }
 
-                execvp(args[0], args);
-                fprintf(stderr, "%s: command not found\n", args[0]);
-                for (int j = 0; j < argc; j++) free(args[j]);
-                exit(127);
+                int final;
+                if (read(read_fd, &final, sizeof(int)) != sizeof(int)) {
+                    perror("read final");
+                    exit(1);
+                }
+                final = safe_increment(final);
+                printf("Valor final recibido por el proceso %d: %d\n", start, final);
+            } else {
+                int x;
+                if (read(read_fd, &x, sizeof(int)) != sizeof(int)) {
+                    perror("read");
+                    exit(1);
+                }
+                x = safe_increment(x);
+                if (write(write_fd, &x, sizeof(int)) != sizeof(int)) {
+                    perror("write");
+                    exit(1);
+                }
             }
-        }
 
-        for (int i = 0; i < 2 * (command_count - 1); i++) close(pipefds[i]);
-        for (int i = 0; i < command_count; i++) wait(NULL);
+            close(read_fd);
+            close(write_fd);
+            exit(0);
+        }
     }
 
-    return 0;
+    for (int i = 0; i < n; i++) {
+        close(ring[i][0]);
+        close(ring[i][1]);
+    }
+
+    int status, failed = 0;
+    while (wait(&status) > 0) {
+        if (WIFEXITED(status) && WEXITSTATUS(status) != 0) failed = 1;
+    }
+
+    return failed ? 1 : 0;
 }
